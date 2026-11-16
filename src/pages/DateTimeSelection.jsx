@@ -1,152 +1,226 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { ChevronLeft, ChevronRight, Clock, ArrowRight } from 'lucide-react';
-import { EquipmentVisual } from '../components/EquipmentVisual';
+import { ChevronLeft, ChevronRight, Clock, ArrowRight, Calendar as CalendarIcon, Zap, Crosshair, Shield } from 'lucide-react';
 
 export const DateTimeSelection = () => {
   const {
     selectedEquipment,
     selectedDate,
     setSelectedDate,
+    selectedDateISO,
+    selectedDateFormatted,
     selectedSlot,
     setSelectedSlot,
-    setCurrentPage
+    setCurrentPage,
+    isSlotBooked,
+    activeTimeSlotLabels,
+    addToast
   } = useApp();
 
-  const [currentMonthIndex, setCurrentMonthIndex] = useState(1);
-  const monthNames = ['October 2026', 'November 2026', 'December 2026'];
+  // Local calendar view navigation state (year & month)
+  const initialDate = selectedDate instanceof Date && !isNaN(selectedDate) ? selectedDate : new Date();
+  const [viewDate, setViewDate] = useState(() => new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
 
-  // Days in November 2026 matching reference
-  const days = [
-    { num: 26, isCurrentMonth: false, disabled: true },
-    { num: 27, isCurrentMonth: false, disabled: true },
-    { num: 28, isCurrentMonth: false, disabled: true },
-    { num: 29, isCurrentMonth: false, disabled: true },
-    { num: 30, isCurrentMonth: false, disabled: true },
-    { num: 31, isCurrentMonth: false, disabled: true },
-    { num: 1, isCurrentMonth: true, disabled: true },
-    { num: 2, isCurrentMonth: true, disabled: true },
-    { num: 3, isCurrentMonth: true, disabled: true },
-    { num: 4, isCurrentMonth: true, disabled: true },
-    { num: 5, isCurrentMonth: true, disabled: true },
-    { num: 6, isCurrentMonth: true, disabled: true },
-    { num: 7, isCurrentMonth: true, disabled: true },
-    { num: 8, isCurrentMonth: true, disabled: true },
-    { num: 9, isCurrentMonth: true, disabled: true },
-    { num: 10, isCurrentMonth: true, disabled: true },
-    { num: 11, isCurrentMonth: true, disabled: true },
-    { num: 12, isCurrentMonth: true, disabled: true },
-    { num: 13, isCurrentMonth: true, disabled: true },
-    { num: 14, isCurrentMonth: true, disabled: true },
-    { num: 15, isCurrentMonth: true, disabled: false }, // Today / Reference active day
-    { num: 16, isCurrentMonth: true, disabled: false },
-    { num: 17, isCurrentMonth: true, disabled: false },
-    { num: 18, isCurrentMonth: true, disabled: false },
-    { num: 19, isCurrentMonth: true, disabled: false },
-    { num: 20, isCurrentMonth: true, disabled: false },
-    { num: 21, isCurrentMonth: true, disabled: false },
-    { num: 22, isCurrentMonth: true, disabled: false },
-    { num: 23, isCurrentMonth: true, disabled: false },
-    { num: 24, isCurrentMonth: true, disabled: false },
-    { num: 25, isCurrentMonth: true, disabled: false },
-    { num: 26, isCurrentMonth: true, disabled: false },
-    { num: 27, isCurrentMonth: true, disabled: false },
-    { num: 28, isCurrentMonth: true, disabled: false },
-    { num: 29, isCurrentMonth: true, disabled: false },
-    { num: 30, isCurrentMonth: true, disabled: false },
-    { num: 1, isCurrentMonth: false, disabled: true },
-    { num: 2, isCurrentMonth: false, disabled: true },
-    { num: 3, isCurrentMonth: false, disabled: true },
-    { num: 4, isCurrentMonth: false, disabled: true },
-    { num: 5, isCurrentMonth: false, disabled: true },
-    { num: 6, isCurrentMonth: false, disabled: true },
-  ];
+  const viewYear = viewDate.getFullYear();
+  const viewMonth = viewDate.getMonth();
 
-  // Exactly 9 hourly slots (3x3 grid) matching Frame 3 in reference
-  const timeSlots = [
-    '09:00 AM', '10:00 AM', '11:00 AM',
-    '12:00 PM', '01:00 PM', '02:00 PM',
-    '03:00 PM', '04:00 PM', '05:00 PM'
-  ];
+  // Month title e.g. "NOVEMBER 2026"
+  const monthTitle = useMemo(() => {
+    return viewDate.toLocaleString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
+  }, [viewDate]);
+
+  // Today at midnight for disabling past dates
+  const todayAtMidnight = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  // Check if we can go to previous month (don't allow going before current month)
+  const canGoPrevMonth = useMemo(() => {
+    const currentMonthStart = new Date(todayAtMidnight.getFullYear(), todayAtMidnight.getMonth(), 1);
+    return viewDate > currentMonthStart;
+  }, [viewDate, todayAtMidnight]);
+
+  const handlePrevMonth = () => {
+    if (canGoPrevMonth) {
+      setViewDate(new Date(viewYear, viewMonth - 1, 1));
+    }
+  };
+
+  const handleNextMonth = () => {
+    // Allow up to 12 months in advance
+    setViewDate(new Date(viewYear, viewMonth + 1, 1));
+  };
+
+  // Generate dynamic calendar matrix
+  const calendarDays = useMemo(() => {
+    const days = [];
+    const firstDayIndex = new Date(viewYear, viewMonth, 1).getDay(); // 0 = Sun
+    const daysInCurrentMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const daysInPrevMonth = new Date(viewYear, viewMonth, 0).getDate();
+
+    // Leading days from previous month
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      const d = daysInPrevMonth - i;
+      const fullDate = new Date(viewYear, viewMonth - 1, d);
+      days.push({
+        num: d,
+        date: fullDate,
+        isCurrentMonth: false,
+        disabled: true
+      });
+    }
+
+    // Days in current month
+    for (let d = 1; d <= daysInCurrentMonth; d++) {
+      const fullDate = new Date(viewYear, viewMonth, d);
+      const isPast = fullDate < todayAtMidnight;
+      days.push({
+        num: d,
+        date: fullDate,
+        isCurrentMonth: true,
+        disabled: isPast
+      });
+    }
+
+    // Trailing days from next month to complete standard grid (multiple of 7)
+    const totalCells = Math.ceil(days.length / 7) * 7;
+    const trailingCount = totalCells - days.length;
+    for (let t = 1; t <= trailingCount; t++) {
+      const fullDate = new Date(viewYear, viewMonth + 1, t);
+      days.push({
+        num: t,
+        date: fullDate,
+        isCurrentMonth: false,
+        disabled: true
+      });
+    }
+
+    return days;
+  }, [viewYear, viewMonth, todayAtMidnight]);
+
+  // Slots to display
+  const availableSlots = activeTimeSlotLabels && activeTimeSlotLabels.length > 0
+    ? activeTimeSlotLabels
+    : ['09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM'];
+
+  const handleDateSelect = (fullDate) => {
+    setSelectedDate(fullDate);
+  };
 
   const handleContinue = () => {
+    if (!selectedSlot) {
+      addToast('Please select a 1-hour session slot.', 'warning');
+      return;
+    }
+    if (isSlotBooked && isSlotBooked(selectedEquipment?.id, selectedDateISO, selectedSlot)) {
+      addToast('Selected slot is already reserved. Please pick another slot.', 'warning');
+      return;
+    }
     setCurrentPage('checkout');
   };
 
-  return (
-    <div className="relative min-h-[calc(100vh-80px)] py-10 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto flex flex-col justify-between overflow-hidden">
-      {/* Hooded gamer ambient silhouette artwork in top-right matching reference image */}
-      <div className="absolute top-0 right-0 w-80 h-80 pointer-events-none opacity-20 -z-10 overflow-hidden">
-        <svg viewBox="0 0 200 200" className="w-full h-full text-[#36D98A]">
-          <path d="M 60 180 C 60 120 70 80 100 40 C 130 80 140 120 140 180 Z" fill="currentColor" opacity="0.4" />
-          <circle cx="100" cy="70" r="25" fill="#080D0B" />
-          <path d="M 75 80 C 85 60 115 60 125 80" stroke="currentColor" strokeWidth="3" fill="none" />
-        </svg>
-      </div>
-      <div className="absolute top-4 right-8 w-64 h-64 bg-radial from-[#36D98A]/15 to-transparent blur-3xl pointer-events-none -z-10" />
+  const getEquipmentImage = () => {
+    if (selectedEquipment?.image) return selectedEquipment.image;
+    if (selectedEquipment?.type === 'controller') return '/images/controller-hero.jpg';
+    if (selectedEquipment?.type === 'combo') return '/images/combo-setup.jpg';
+    return '/images/laptop-hero.jpg';
+  };
 
-      {/* Header matching reference */}
-      <div className="mb-6">
-        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#F4F4EF]">
-          Select Date & Time
-        </h2>
-        <p className="text-xs sm:text-sm text-[#A7ADA8] mt-0.5">
-          Pick your preferred slot
-        </p>
+  const isDaySelected = (dayDate) => {
+    if (!(selectedDate instanceof Date) || isNaN(selectedDate)) return false;
+    return (
+      dayDate.getFullYear() === selectedDate.getFullYear() &&
+      dayDate.getMonth() === selectedDate.getMonth() &&
+      dayDate.getDate() === selectedDate.getDate()
+    );
+  };
+
+  return (
+    <div className="relative min-h-[calc(100vh-80px)] py-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex flex-col justify-between">
+      {/* Background ambient lighting */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-radial from-[#C6FF00]/10 to-transparent blur-3xl pointer-events-none -z-10" />
+
+      {/* Cyber-Tech Editorial Header */}
+      <div className="mb-8 border-b border-white/[0.08] pb-5 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass-pill text-xs font-mono font-bold text-[#C6FF00] mb-2 shadow-lime-sm">
+            <Crosshair className="w-3.5 h-3.5" />
+            <span>TIME_CALENDAR_LOCK // PROTOCOL_02</span>
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-[#F5F7F2]">
+            SELECT DATE & 1-HR SLOT
+          </h1>
+        </div>
+
+        <div className="text-xs font-mono text-[#9EA79C] flex items-center gap-2">
+          <span>CONFLICT_CHECK: </span>
+          <span className="px-2.5 py-0.5 rounded-full glass-pill text-[#C6FF00] font-bold">AUTOMATED_ACTIVE</span>
+        </div>
       </div>
 
       {/* Main Grid: Left Calendar & Right Available Slots */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start mb-8">
         
         {/* Left Section: Monthly Calendar */}
-        <div className="md:col-span-6 bg-[#111815] border border-[#1E2822] rounded-2xl p-5 shadow-card">
+        <div className="lg:col-span-6 glass-panel rounded-3xl p-6 sm:p-7 shadow-2xl relative">
+          <div className="absolute top-3 right-3 text-[9px] font-mono text-[#687366] uppercase">[CALENDAR_MATRIX]</div>
+
           {/* Calendar Header with Controls */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-6">
             <button
-              onClick={() => setCurrentMonthIndex((prev) => Math.max(0, prev - 1))}
-              className="p-1 rounded text-[#A7ADA8] hover:text-[#F4F4EF] transition-colors"
+              onClick={handlePrevMonth}
+              disabled={!canGoPrevMonth}
+              aria-label="Previous Month"
+              className={`p-2 rounded-xl transition-colors ${
+                canGoPrevMonth
+                  ? 'text-[#9EA79C] hover:text-[#F5F7F2] glass-pill hover:bg-white/[0.08] cursor-pointer'
+                  : 'text-[#363E37] bg-white/[0.02] cursor-not-allowed opacity-40'
+              }`}
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="text-sm font-bold text-[#F4F4EF]">
-              {monthNames[currentMonthIndex]}
+            <span className="text-sm font-mono font-black text-[#F5F7F2] tracking-wider">
+              {monthTitle}
             </span>
             <button
-              onClick={() => setCurrentMonthIndex((prev) => Math.min(2, prev + 1))}
-              className="p-1 rounded text-[#A7ADA8] hover:text-[#F4F4EF] transition-colors"
+              onClick={handleNextMonth}
+              aria-label="Next Month"
+              className="p-2 rounded-xl text-[#9EA79C] hover:text-[#F5F7F2] glass-pill hover:bg-white/[0.08] transition-colors cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
           {/* Days of Week Header */}
-          <div className="grid grid-cols-7 text-center text-[11px] font-semibold text-[#777F79] mb-2">
-            <span>Su</span>
-            <span>Mo</span>
-            <span>Tu</span>
-            <span>We</span>
-            <span>Th</span>
-            <span>Fr</span>
-            <span>Sa</span>
+          <div className="grid grid-cols-7 text-center text-[10px] font-mono font-bold uppercase tracking-wider text-[#687366] mb-3">
+            <span>SUN</span>
+            <span>MON</span>
+            <span>TUE</span>
+            <span>WED</span>
+            <span>THU</span>
+            <span>FRI</span>
+            <span>SAT</span>
           </div>
 
           {/* Days Grid */}
-          <div className="grid grid-cols-7 gap-y-1 text-center text-xs font-medium">
-            {days.map((day, idx) => {
-              const isSelected = day.num === selectedDate && day.isCurrentMonth;
+          <div className="grid grid-cols-7 gap-y-2 text-center text-xs font-mono font-bold">
+            {calendarDays.map((day, idx) => {
+              const isSelected = isDaySelected(day.date) && day.isCurrentMonth;
               const isDisabled = day.disabled || !day.isCurrentMonth;
 
               return (
-                <div key={idx} className="flex items-center justify-center py-1">
+                <div key={idx} className="flex items-center justify-center py-0.5">
                   <button
                     disabled={isDisabled}
-                    onClick={() => setSelectedDate(day.num)}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                    onClick={() => handleDateSelect(day.date)}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
                       isSelected
-                        ? 'bg-[#36D98A] text-[#080D0B] font-bold shadow-emerald-glow scale-105'
+                        ? 'bg-[#C6FF00] text-[#080A08] font-black shadow-lime-sm scale-110 cursor-pointer'
                         : isDisabled
-                        ? 'text-[#444D47] cursor-default'
-                        : 'text-[#F4F4EF] hover:bg-[#171E1A] hover:text-[#36D98A]'
+                        ? 'text-[#363E37] cursor-default'
+                        : 'text-[#F5F7F2] hover:bg-white/[0.08] hover:text-[#C6FF00] cursor-pointer'
                     }`}
                   >
                     {day.num}
@@ -157,70 +231,101 @@ export const DateTimeSelection = () => {
           </div>
         </div>
 
-        {/* Right Section: Available Slots matching reference */}
-        <div className="md:col-span-6 bg-[#111815] border border-[#1E2822] rounded-2xl p-5 shadow-card">
-          <h3 className="text-sm font-bold text-[#F4F4EF] mb-4">
-            Available Slots
-          </h3>
+        {/* Right Section: Available Slots */}
+        <div className="lg:col-span-6 glass-panel rounded-3xl p-6 sm:p-7 shadow-2xl relative">
+          <div className="absolute top-3 right-3 text-[9px] font-mono text-[#687366] uppercase">[SLOT_DISPATCHER]</div>
 
-          {/* 3x3 Slot Grid */}
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-base font-black text-[#F5F7F2]">
+              HOURLY SESSIONS (1-HR)
+            </h3>
+            <span className="text-xs font-mono font-bold text-[#C6FF00] glass-pill px-3 py-1 rounded-full border-[#C6FF00]/30 shadow-lime-sm">
+              {selectedDateFormatted ? selectedDateFormatted.toUpperCase() : 'SELECTED DATE'}
+            </span>
+          </div>
+
+          {/* Slot Grid (dynamic rows of 3 columns) */}
           <div className="grid grid-cols-3 gap-3">
-            {timeSlots.map((slot) => {
-              const isSelected = selectedSlot === slot;
+            {availableSlots.map((slot) => {
+              const isBooked = isSlotBooked && isSlotBooked(selectedEquipment?.id, selectedDateISO, slot);
+              const isSelected = selectedSlot === slot && !isBooked;
 
               return (
                 <button
                   key={slot}
+                  disabled={isBooked}
                   onClick={() => setSelectedSlot(slot)}
-                  className={`py-2 px-2 rounded-xl text-xs font-semibold tracking-wide transition-all border ${
-                    isSelected
-                      ? 'bg-[#36D98A] text-[#080D0B] border-[#36D98A] font-bold shadow-emerald-glow'
-                      : 'bg-[#171E1A] text-[#F4F4EF] border-[#222E27] hover:border-[#36D98A]/50 hover:bg-[#1A241F]'
+                  className={`py-3.5 px-2 rounded-2xl text-xs font-mono font-bold tracking-wide transition-all border flex flex-col items-center justify-center gap-1 ${
+                    isBooked
+                      ? 'bg-white/[0.02] text-[#4D5750] border-white/[0.04] cursor-not-allowed'
+                      : isSelected
+                      ? 'bg-[#C6FF00] text-[#080A08] border-[#C6FF00] font-black shadow-lime-glow scale-102 cursor-pointer'
+                      : 'glass-pill text-[#F5F7F2] hover:border-[#C6FF00]/50 hover:bg-white/[0.08] cursor-pointer'
                   }`}
                 >
-                  {slot}
+                  <span>{slot}</span>
+                  {isBooked ? (
+                    <span className="text-[8px] text-[#FF453A] font-bold uppercase tracking-wider">BOOKED</span>
+                  ) : (
+                    <span className="text-[8px] text-[#C6FF00]/80 font-mono">1-HOUR</span>
+                  )}
                 </button>
               );
             })}
           </div>
+
+          {availableSlots.length === 0 && (
+            <div className="text-center py-8 text-xs font-mono text-[#687366]">
+              NO ACTIVE SLOTS CONFIGURED BY ADMIN
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Bottom Section: Selected Equipment Summary Bar matching reference */}
-      <div className="bg-[#111815] border border-[#1E2822] rounded-2xl p-4 shadow-card flex flex-col sm:flex-row items-center justify-between gap-4">
-        {/* Left Item Details */}
-        <div className="flex items-center gap-4 w-full sm:w-auto">
-          {/* Small thumbnail */}
-          <div className="w-14 h-11 rounded-lg bg-[#0D1511] border border-[#1E2B23] p-0.5 flex items-center justify-center overflow-hidden flex-shrink-0">
-            <EquipmentVisual type={selectedEquipment?.type || 'laptop'} className="h-full w-full" />
+      {/* Bottom Section: 3D Stone Podium Rig Preview Bar */}
+      <div className="glass-panel rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-6">
+        
+        {/* Left Rig Details with Stone Slab Preview */}
+        <div className="flex items-center gap-5 w-full lg:w-auto">
+          {/* Stone Podium Mini Stage */}
+          <div className="relative w-24 h-16 rounded-xl bg-[#040504] border border-[#C6FF00]/30 p-1 flex items-center justify-center overflow-hidden shrink-0 shadow-lime-sm">
+            <div className="absolute inset-x-0 bottom-0 h-6 bg-cover bg-bottom opacity-70 pointer-events-none" style={{ backgroundImage: "url('/images/stone-pedestal.jpg')" }} />
+            <img src={getEquipmentImage()} alt="Rig" className="w-[85%] h-auto max-h-12 object-contain z-10" />
+            <div className="absolute inset-0 bg-radial from-[#C6FF00]/20 via-transparent to-transparent pointer-events-none" />
           </div>
 
           <div>
-            <div className="text-[11px] text-[#777F79] font-medium">
-              Selected Equipment
+            <div className="text-[10px] font-mono text-[#687366] font-bold uppercase tracking-wider">
+              RESERVED RIG & STONE DOCK
             </div>
-            <div className="text-sm font-bold text-[#F4F4EF]">
-              {selectedEquipment?.name || 'Gaming Laptop'}
+            <div className="text-base font-black text-[#F5F7F2]">
+              {selectedEquipment?.name || 'ASUS TUF Gaming Laptop'}
             </div>
-            <div className="text-xs font-semibold text-[#36D98A]">
+            <div className="text-xs font-mono font-bold text-[#C6FF00]">
               ₹{selectedEquipment?.price || 50} / hour
             </div>
           </div>
         </div>
 
-        {/* Duration */}
-        <div className="flex items-center gap-1.5 text-xs text-[#A7ADA8]">
-          <Clock className="w-3.5 h-3.5 text-[#36D98A]" />
-          <span>Duration: 1 Hour</span>
+        {/* Duration & Slot Readout */}
+        <div className="flex flex-wrap items-center gap-6 text-xs font-mono text-[#9EA79C]">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-[#C6FF00]" />
+            <span className="text-[#F5F7F2] font-bold">{selectedSlot || '11:00 AM'} (1-HR BLOCK)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-[#C6FF00]" />
+            <span>INSTANT SESSION ACTIVATION</span>
+          </div>
         </div>
 
         {/* Continue Button */}
         <button
           onClick={handleContinue}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-2.5 rounded-xl bg-[#36D98A] hover:bg-[#16B86A] text-[#080D0B] font-bold text-xs shadow-emerald-sm hover:shadow-emerald-glow transition-all"
+          className="w-full lg:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-full bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-mono font-black text-xs tracking-wider uppercase shadow-lime-sm hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
         >
-          <span>Continue</span>
-          <ArrowRight className="w-3.5 h-3.5" />
+          <span>PROCEED TO PAYMENT</span>
+          <ArrowRight className="w-4 h-4 stroke-[3]" />
         </button>
       </div>
     </div>

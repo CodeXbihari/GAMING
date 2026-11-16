@@ -7,7 +7,7 @@ export const EquipmentVisual = ({ type, className = "h-40 w-full" }) => {
         {/* Subtle ambient green spotlight */}
         <div className="absolute inset-0 bg-radial from-[#36D98A]/18 via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
         
-        {/* Rendered High-Fidelity ROG Strix Laptop */}
+        {/* Rendered High-Fidelity TUF Gaming Laptop */}
         <svg viewBox="0 0 320 200" className="w-full h-full max-h-44 drop-shadow-[0_15px_30px_rgba(0,0,0,0.95)] transition-transform duration-500 group-hover:scale-105">
           <defs>
             <linearGradient id="laptopLid" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -160,20 +160,24 @@ export const EquipmentVisual = ({ type, className = "h-40 w-full" }) => {
     );
   }
 
-  // Combo Setup (Laptop + Controller together)
+  // Combo Setup (Laptop + 2 Controllers together)
   return (
     <div className={`relative flex items-center justify-center overflow-hidden p-2 group ${className}`}>
       {/* Ambient gold + green spotlight matching combo card in reference */}
-      <div className="absolute inset-0 bg-radial from-[#D8B45A]/16 via-[#36D98A]/12 to-transparent opacity-85 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+      <div className="absolute inset-0 bg-radial from-[#D8B45A]/16 via-[#C6FF00]/12 to-transparent opacity-85 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
       
       <div className="relative w-full h-full flex items-center justify-center">
         {/* Background Angled Laptop */}
-        <div className="w-[84%] -translate-y-3 transition-transform duration-500 group-hover:-translate-y-4">
+        <div className="w-[80%] -translate-y-3 transition-transform duration-500 group-hover:-translate-y-4">
           <EquipmentVisual type="laptop" className="h-32 w-full !p-0" />
         </div>
-        {/* Foreground Angled Controller */}
-        <div className="absolute bottom-0 right-1 w-[56%] translate-y-3 drop-shadow-[0_12px_24px_rgba(0,0,0,0.95)] transition-transform duration-500 group-hover:scale-105">
-          <EquipmentVisual type="controller" className="h-28 w-full !p-0" />
+        {/* Foreground Left Controller */}
+        <div className="absolute bottom-0 left-0 w-[48%] translate-y-3 -rotate-6 drop-shadow-[0_12px_24px_rgba(0,0,0,0.95)] transition-transform duration-500 group-hover:scale-105">
+          <EquipmentVisual type="controller" className="h-24 w-full !p-0" />
+        </div>
+        {/* Foreground Right Controller */}
+        <div className="absolute bottom-0 right-0 w-[48%] translate-y-3 rotate-6 drop-shadow-[0_12px_24px_rgba(0,0,0,0.95)] transition-transform duration-500 group-hover:scale-105">
+          <EquipmentVisual type="controller" className="h-24 w-full !p-0" />
         </div>
       </div>
     </div>

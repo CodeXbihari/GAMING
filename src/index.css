@@ -4,70 +4,146 @@
 
 @layer base {
   body {
-    background-color: #080D0B;
-    color: #F4F4EF;
+    background-color: #060806;
+    color: #F5F7F2;
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     overflow-x: hidden;
   }
 }
 
-/* Custom glow and atmospheric lighting */
-.emerald-glow-radial {
-  background: radial-gradient(circle at center, rgba(54, 217, 138, 0.18) 0%, rgba(11, 61, 43, 0.08) 50%, transparent 75%);
+/* ------------------------------------------------------------- */
+/* ULTRA-PREMIUM GLASSMORPHISM DESIGN SYSTEM                     */
+/* ------------------------------------------------------------- */
+
+/* Luxury Smoked Frosted Glass Card */
+.glass-panel {
+  background: rgba(14, 18, 15, 0.65);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
+    0 20px 45px -15px rgba(0, 0, 0, 0.75);
 }
 
-.emerald-hero-light {
-  background: radial-gradient(circle at 70% 40%, rgba(54, 217, 138, 0.22) 0%, rgba(22, 184, 106, 0.1) 35%, transparent 70%);
+.glass-panel:hover {
+  border-color: rgba(198, 255, 0, 0.35);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.18),
+    0 0 30px -5px rgba(198, 255, 0, 0.2),
+    0 25px 50px -15px rgba(0, 0, 0, 0.85);
 }
 
-.gold-glow-radial {
-  background: radial-gradient(circle at center, rgba(216, 180, 90, 0.2) 0%, rgba(141, 120, 69, 0.05) 50%, transparent 75%);
+/* Glass Card with Electric Lime Trim */
+.glass-panel-lime {
+  background: rgba(14, 18, 15, 0.75);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1.5px solid rgba(198, 255, 0, 0.4);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(198, 255, 0, 0.25),
+    0 0 35px -5px rgba(198, 255, 0, 0.28),
+    0 20px 50px -10px rgba(0, 0, 0, 0.8);
 }
 
-/* Custom subtle scrollbar */
+/* Hero Glass Nav Floating Header */
+.glass-nav {
+  background: rgba(6, 8, 6, 0.72);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.02),
+    0 10px 30px -10px rgba(0, 0, 0, 0.6);
+}
+
+/* Floating Glass Pill Container */
+.glass-pill {
+  background: rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Solid Inverted Hero Bento Card with Glass Depth */
+.bento-card-inverted {
+  background: linear-gradient(135deg, #C6FF00 0%, #B8F200 100%);
+  color: #080A08;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
+    0 20px 50px -10px rgba(198, 255, 0, 0.45);
+}
+
+/* Frosted Modal Window */
+.glass-modal {
+  background: rgba(10, 13, 11, 0.85);
+  backdrop-filter: blur(36px);
+  -webkit-backdrop-filter: blur(36px);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
+    0 35px 70px -15px rgba(0, 0, 0, 0.95),
+    0 0 50px -10px rgba(198, 255, 0, 0.15);
+}
+
+/* Frosted Input Fields */
+.glass-input {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+  transition: all 0.2s ease;
+}
+
+.glass-input:focus {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: #C6FF00;
+  box-shadow: 
+    0 0 15px rgba(198, 255, 0, 0.25),
+    inset 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Atmospheric Atmospheric Radial Glows */
+.lime-glow-radial {
+  background: radial-gradient(circle at center, rgba(198, 255, 0, 0.24) 0%, rgba(198, 255, 0, 0.05) 50%, transparent 75%);
+}
+
+.lime-hero-spotlight {
+  background: radial-gradient(ellipse at 50% 50%, rgba(198, 255, 0, 0.2) 0%, rgba(14, 20, 10, 0.45) 45%, transparent 70%);
+}
+
+.pedestal-underglow {
+  background: radial-gradient(ellipse at 50% 90%, rgba(198, 255, 0, 0.4) 0%, rgba(198, 255, 0, 0.08) 50%, transparent 75%);
+}
+
+/* Cyber Grid Backdrop */
+.bg-grid-cyber {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+}
+
+/* Custom Sleek Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #080D0B;
+  background: #060806;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #171E1A;
+  background: #1B241C;
   border-radius: 9999px;
-  border: 1px solid #0B3D2B;
+  border: 1px solid rgba(198, 255, 0, 0.2);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #36D98A;
-}
-
-/* Glowing card borders */
-.card-border-green {
-  border: 1px solid rgba(54, 217, 138, 0.2);
-}
-
-.card-border-green:hover {
-  border-color: rgba(54, 217, 138, 0.6);
-  box-shadow: 0 0 20px -3px rgba(54, 217, 138, 0.25);
-}
-
-.card-border-gold {
-  border: 1px solid #8D7845;
-  box-shadow: 0 0 15px -3px rgba(216, 180, 90, 0.25);
-}
-
-.card-border-gold:hover {
-  border-color: #D8B45A;
-  box-shadow: 0 0 25px -3px rgba(216, 180, 90, 0.4);
-}
-
-/* Subtle grid backdrop */
-.bg-grid-pattern {
-  background-size: 32px 32px;
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background: #C6FF00;
+  box-shadow: 0 0 10px #C6FF00;
 }

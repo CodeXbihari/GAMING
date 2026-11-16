@@ -7,6 +7,7 @@ import { HomePage } from './pages/HomePage';
 import { EquipmentSelection } from './pages/EquipmentSelection';
 import { DateTimeSelection } from './pages/DateTimeSelection';
 import { Checkout } from './pages/Checkout';
+import { supabase } from './lib/supabase';
 import { BookingConfirmation } from './pages/BookingConfirmation';
 import { MyBookings } from './pages/MyBookings';
 import { AdminLayout } from './components/AdminLayout';
@@ -14,7 +15,7 @@ import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { AdminEquipment } from './pages/admin/AdminEquipment';
 import { AdminPayments } from './pages/admin/AdminPayments';
 import { AdminBookings } from './pages/admin/AdminBookings';
-
+import { AdminTimeSlots } from './pages/admin/AdminTimeSlots';
 const MainContent = () => {
   const { currentPage, adminSubPage } = useApp();
 
@@ -24,12 +25,13 @@ const MainContent = () => {
       <AdminLayout>
         {adminSubPage === 'dashboard' && <AdminDashboard />}
         {adminSubPage === 'equipment' && <AdminEquipment />}
-        {adminSubPage === 'payments' && <AdminPayments />}
         {adminSubPage === 'bookings' && <AdminBookings />}
+        {adminSubPage === 'payments' && <AdminPayments />}
+        {adminSubPage === 'timeslots' && <AdminTimeSlots />}
         {(adminSubPage === 'students' || adminSubPage === 'reports' || adminSubPage === 'settings') && (
-          <div className="p-8 text-center bg-[#111815] border border-[#1E2822] rounded-2xl">
-            <h3 className="text-base font-bold text-[#F4F4EF] capitalize">{adminSubPage} Module</h3>
-            <p className="text-xs text-[#A7ADA8] mt-1">Hostel Gaming Hub administrative records.</p>
+          <div className="p-8 text-center bg-[#111512] border-2 border-white/[0.08] rounded-3xl font-mono">
+            <h3 className="text-base font-black text-[#F5F7F2] uppercase">{adminSubPage} Module</h3>
+            <p className="text-xs text-[#9EA79C] mt-1">Hostel Gaming Hub administrative records.</p>
           </div>
         )}
       </AdminLayout>
@@ -38,7 +40,7 @@ const MainContent = () => {
 
   // Customer Mode matching reference design
   return (
-    <div className="min-h-screen flex flex-col bg-[#080D0B] text-[#F4F4EF] relative">
+    <div className="min-h-screen flex flex-col bg-[#080A08] text-[#F5F7F2] relative">
       <Navbar />
 
       <main className="flex-1">

@@ -1,3 +1,13 @@
+# Environment variables
+.env
+.env*.local
+.env.production
+query.json
+supabase/.temp/
+*.ps1
+deploy_api.ps1
+deploy_functions.ps1
+
 # Logs
 logs
 *.log
