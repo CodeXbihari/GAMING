@@ -1,0 +1,14 @@
+[functions.bookings_create]
+verify_jwt = false
+
+[functions.booking_availability]
+verify_jwt = false
+
+[functions.game_download_request]
+verify_jwt = false
+
+[functions.payments_upload]
+verify_jwt = false
+
+[functions.notifications_send]
+verify_jwt = true

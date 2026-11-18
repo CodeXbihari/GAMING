@@ -25,8 +25,6 @@ export const Checkout = () => {
     setPaymentMethod,
     utrNumber,
     setUtrNumber,
-    paymentProofName,
-    setPaymentProofName,
     createBooking,
     setCurrentPage,
     getEndSlotTime,
@@ -50,9 +48,14 @@ export const Checkout = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (paymentMethod === 'UPI' && !/^\d{4}$/.test(utrNumber.trim())) {
+      addToast('Enter the last 4 digits of your UPI transaction reference.', 'warning');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const booking = await createBooking({ utr: 'UPI-DIRECT-SCAN' });
+      const booking = await createBooking({ utr: utrNumber.trim() });
       if (!booking) {
         setSubmitting(false);
       }
@@ -252,8 +255,24 @@ export const Checkout = () => {
               {/* Direct Instant Confirmation Form */}
               <form onSubmit={handleSubmit} className="space-y-4 pt-4 border-t border-white/[0.06] font-mono">
                 <p className="text-xs text-[#9EA79C]">
-                  Scan the QR code to pay ₹{totalAmount}, then click below to confirm your booking:
+                  Pay ₹{totalAmount} using the QR code, then enter the transaction reference shown by your UPI app:
                 </p>
+
+                <label className="block space-y-2">
+                  <span className="text-[10px] font-bold tracking-wider text-[#9EA79C]">UPI REFERENCE — LAST 4 DIGITS</span>
+                  <input
+                    type="text"
+                    value={utrNumber}
+                    onChange={(event) => setUtrNumber(event.target.value.replace(/\D/g, '').slice(0, 4))}
+                    required
+                    inputMode="numeric"
+                    autoComplete="off"
+                    maxLength={4}
+                    pattern="[0-9]{4}"
+                    placeholder="e.g. 4821"
+                    className="w-full rounded-xl border border-white/10 bg-[#080A08] px-4 py-3 text-sm text-[#F5F7F2] outline-none placeholder:text-[#687366] focus:border-[#C6FF00]"
+                  />
+                </label>
 
                 <button
                   type="submit"

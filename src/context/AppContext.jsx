@@ -55,6 +55,23 @@ const DEFAULT_TIME_SLOTS = [
   '03:00 PM', '04:00 PM', '05:00 PM'
 ];
 
+const normalizeEquipmentStatus = (status) => {
+  const value = String(status || 'Available');
+  if (value.toLowerCase() === 'available') return 'Available';
+  if (value.toLowerCase() === 'maintenance') return 'Maintenance';
+  return value;
+};
+
+const normalizeBookingStatus = (status) => {
+  const value = String(status || 'Confirmed');
+  const normalized = value.toLowerCase().replaceAll('_', ' ').trim();
+  if (normalized === 'pending payment' || normalized === 'pending verification') return 'Pending Verification';
+  if (normalized === 'confirmed') return 'Confirmed';
+  if (normalized === 'cancelled' || normalized === 'canceled') return 'Cancelled';
+  if (normalized === 'completed') return 'Completed';
+  return value;
+};
+
 const INITIAL_TIME_SLOTS = [
   { id: 'ts-1', label: '09:00 AM', startTime: '09:00', endTime: '10:00', isActive: true, sortOrder: 1 },
   { id: 'ts-2', label: '10:00 AM', startTime: '10:00', endTime: '11:00', isActive: true, sortOrder: 2 },
@@ -72,6 +89,70 @@ export const AppProvider = ({ children }) => {
   const [currentPage, setCurrentPage] = useState('home');
   const [adminSubPage, setAdminSubPage] = useState('dashboard');
 
+  // Supabase Auth is used for real admin access; the demo student profile below
+  // remains separate from the authenticated admin identity.
+  const [authSession, setAuthSession] = useState(null);
+  const [authSessionReady, setAuthSessionReady] = useState(false);
+  const [authProfile, setAuthProfile] = useState(null);
+  const [authProfileLoading, setAuthProfileLoading] = useState(false);
+  const [authProfileError, setAuthProfileError] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!mounted) return;
+      if (error) console.warn('Could not restore Supabase session:', error.message);
+      setAuthSession(data?.session || null);
+      setAuthSessionReady(true);
+    }).catch((error) => {
+      if (!mounted) return;
+      console.warn('Could not restore Supabase session:', error);
+      setAuthSessionReady(true);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthSession(session);
+      setAuthSessionReady(true);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    let current = true;
+    if (!authSessionReady) return () => { current = false; };
+    if (!authSession?.user?.id) {
+      setAuthProfile(null);
+      setAuthProfileError('');
+      setAuthProfileLoading(false);
+      return () => { current = false; };
+    }
+
+    setAuthProfileLoading(true);
+    setAuthProfileError('');
+    supabase
+      .from('profiles')
+      .select('id, email, full_name, role')
+      .eq('id', authSession.user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!current) return;
+        setAuthProfile(data || null);
+        setAuthProfileError(error?.message || '');
+        setAuthProfileLoading(false);
+      }).catch((error) => {
+        if (!current) return;
+        setAuthProfile(null);
+        setAuthProfileError(error?.message || 'Could not read admin profile.');
+        setAuthProfileLoading(false);
+      });
+
+    return () => { current = false; };
+  }, [authSessionReady, authSession?.user?.id]);
+
   // Booking Flow State
   const [selectedEquipment, setSelectedEquipment] = useState(() => INITIAL_EQUIPMENT[0]);
   const [selectedDate, setSelectedDate] = useState(() => new Date());
@@ -79,7 +160,14 @@ export const AppProvider = ({ children }) => {
   const [paymentMethod, setPaymentMethod] = useState('UPI');
   const [utrNumber, setUtrNumber] = useState('');
   const [paymentProofName, setPaymentProofName] = useState(null);
-  const [latestBooking, setLatestBooking] = useState(null);
+  const [latestBooking, setLatestBooking] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('hostel_latest_booking');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   // App Data (Loaded from LocalStorage cache with INITIAL_EQUIPMENT fallback)
   const [equipmentList, setEquipmentList] = useState(() => {
@@ -88,13 +176,21 @@ export const AppProvider = ({ children }) => {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.map((item) => ({ ...item, status: normalizeEquipmentStatus(item.status) }));
         }
       }
     } catch (e) {}
     return INITIAL_EQUIPMENT;
   });
-  const [bookings, setBookings] = useState([]);
+  const [bookings, setBookings] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('hostel_guest_bookings');
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
   const [timeSlots, setTimeSlots] = useState(INITIAL_TIME_SLOTS);
 
   // Sync equipment list to local storage so newly added equipment with photos persists immediately
@@ -105,15 +201,22 @@ export const AppProvider = ({ children }) => {
   }, [equipmentList]);
 
   // User Profile
-  const [user, setUser] = useState({
-    id: 'guest-student-001',
-    name: 'Shashank R.',
-    initial: 'S',
-    room: 'Room 304, Block B',
-    hostel: 'Block B',
-    phone: '+91 98765 43210',
-    role: 'student'
+  const [user, setUser] = useState(() => {
+    try {
+      const savedProfile = localStorage.getItem('hostel_student_profile');
+      if (savedProfile) return JSON.parse(savedProfile);
+    } catch {}
+    return { id: 'guest-student-001', name: 'Shashank R.', initial: 'S', room: 'Room 304, Block B', hostel: 'Block B', phone: '+91 98765 43210', role: 'student' };
   });
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('hostel_student_profile', JSON.stringify(user));
+    } catch (error) {
+      console.warn('Could not persist student profile:', error);
+    }
+  }, [user]);
 
   // Toast notification system
   const [toasts, setToasts] = useState([]);
@@ -124,6 +227,49 @@ export const AppProvider = ({ children }) => {
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
+  };
+
+  const signInAdmin = async (email, password) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !password) {
+      addToast('Enter your admin email and password.', 'warning');
+      return false;
+    }
+
+    let error;
+    try {
+      ({ error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password
+      }));
+    } catch (requestError) {
+      addToast('Could not sign in. Check your details and try again.', 'error');
+      return false;
+    }
+
+    if (error) {
+      addToast('Sign-in failed. Check your email and password.', 'error');
+      return false;
+    }
+    addToast('Signed in. Checking administrator access…', 'success');
+    return true;
+  };
+
+  const signOutAdmin = async () => {
+    let error;
+    try {
+      ({ error } = await supabase.auth.signOut());
+    } catch (signOutError) {
+      addToast('Could not sign out. Please try again.', 'error');
+      return false;
+    }
+    if (error) {
+      addToast('Could not sign out. Please try again.', 'error');
+      return false;
+    }
+    setCurrentPage('home');
+    addToast('Signed out of the admin area.', 'success');
+    return true;
   };
 
   // ---------- Date Helpers ----------
@@ -153,6 +299,7 @@ export const AppProvider = ({ children }) => {
   // ---------- Normalizers ----------
   const normalizeEquipment = (item) => {
     const type = (item.type || item.category || 'laptop').toLowerCase();
+    const normalizedStatus = normalizeEquipmentStatus(item.status);
     const isLaptop = type === 'laptop';
     const isCombo = type === 'combo';
     const defaultPrice = isCombo ? 80 : isLaptop ? 50 : 20;
@@ -170,10 +317,10 @@ export const AppProvider = ({ children }) => {
       type: item.type || item.category || (isCombo ? 'combo' : 'laptop'),
       category: item.category || item.type || (isCombo ? 'combo' : 'laptop'),
       price: Number(item.price_per_hour || item.price || defaultPrice),
-      status: item.status || 'Available',
+      status: normalizedStatus,
       inventoryCount: item.inventory_count || item.inventoryCount || 1,
       image: item.image || item.image_url || item.imageUrl || defaultImage,
-      badge: item.badge || (item.status === 'Maintenance' ? 'MAINTENANCE' : (isCombo ? 'TUF LAPTOP + 2x EVOFOX' : isLaptop ? 'RYZEN 7 7435HS + RTX 3050' : '2.4GHz HYPERCONNECT')),
+      badge: item.badge || (normalizedStatus === 'Maintenance' ? 'MAINTENANCE' : (isCombo ? 'TUF LAPTOP + 2x EVOFOX' : isLaptop ? 'RYZEN 7 7435HS + RTX 3050' : '2.4GHz HYPERCONNECT')),
       description: item.description || (isCombo
         ? 'Full Battle Station • ASUS TUF Laptop + 2x EvoFox Gamepads on Stone Dock'
         : isLaptop 
@@ -199,7 +346,7 @@ export const AppProvider = ({ children }) => {
     slot: b.slot || b.start_time || '11:00 AM',
     price: Number(b.total_amount || b.price || 50),
     duration: b.duration || '1 Hour',
-    status: b.booking_status || b.status || 'Confirmed',
+    status: normalizeBookingStatus(b.booking_status || b.status),
     paymentStatus: b.payment_status || b.paymentStatus || 'Pending',
     paymentMethod: b.payment_method || b.paymentMethod || 'UPI',
     utr: b.utr,
@@ -262,8 +409,8 @@ export const AppProvider = ({ children }) => {
         .order('sort_order', { ascending: true });
       if (error) {
         console.error('Supabase time_slots fetch error:', error);
-        // Fallback: keep empty so activeTimeSlotLabels falls back to DEFAULT_TIME_SLOTS
-      } else if (data && data.length) {
+        // Keep the existing schedule available if the backend is temporarily unreachable.
+      } else if (data) {
         setTimeSlots(data.map(normalizeTimeSlot));
       }
     } catch (e) {
@@ -273,9 +420,23 @@ export const AppProvider = ({ children }) => {
 
   useEffect(() => {
     fetchEquipment();
-    fetchBookings();
     fetchTimeSlots();
-  }, [fetchEquipment, fetchBookings, fetchTimeSlots]);
+  }, [fetchEquipment, fetchTimeSlots]);
+
+  useEffect(() => {
+    if (!authSessionReady) return;
+    if (authProfile?.role === 'admin') {
+      fetchBookings();
+      return;
+    }
+    try {
+      const saved = sessionStorage.getItem('hostel_guest_bookings');
+      const parsed = saved ? JSON.parse(saved) : [];
+      setBookings(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setBookings([]);
+    }
+  }, [authSessionReady, authProfile?.role, fetchBookings]);
 
   // ---------- Time Slot CRUD ----------
   const addTimeSlot = async (slotData) => {
@@ -295,35 +456,19 @@ export const AppProvider = ({ children }) => {
         .single();
 
       if (error) {
-        console.warn('Supabase insert time_slots failed (using local fallback):', error.message);
-        const fallbackItem = {
-          id: `ts-${Date.now()}`,
-          label: row.label,
-          startTime: row.start_time,
-          endTime: row.end_time,
-          isActive: row.is_active,
-          sortOrder: row.sort_order
-        };
-        setTimeSlots(prev => [...prev, fallbackItem].sort((a, b) => a.sortOrder - b.sortOrder));
-        addToast(`Time slot "${slotData.label}" added locally!`, 'success');
-        return;
+        console.warn('Supabase insert time_slots failed:', error.message);
+        addToast(`Could not save time slot: ${error.message}`, 'error');
+        return false;
       }
 
       const inserted = normalizeTimeSlot(data || row);
       setTimeSlots(prev => [...prev, inserted].sort((a, b) => a.sortOrder - b.sortOrder));
       addToast(`Time slot "${slotData.label}" added!`, 'success');
+      return true;
     } catch (e) {
       console.warn('addTimeSlot exception:', e);
-      const fallbackItem = {
-        id: `ts-${Date.now()}`,
-        label: row.label,
-        startTime: row.start_time,
-        endTime: row.end_time,
-        isActive: row.is_active,
-        sortOrder: row.sort_order
-      };
-      setTimeSlots(prev => [...prev, fallbackItem].sort((a, b) => a.sortOrder - b.sortOrder));
-      addToast(`Time slot "${slotData.label}" added!`, 'success');
+      addToast('Could not save the time slot. Check your connection and admin access.', 'error');
+      return false;
     }
   };
 
@@ -344,12 +489,9 @@ export const AppProvider = ({ children }) => {
         .single();
 
       if (error) {
-        console.warn('Supabase update time_slots failed (using local fallback):', error.message);
-        setTimeSlots(prev =>
-          prev.map(s => s.id === id ? { ...s, ...fields } : s).sort((a, b) => a.sortOrder - b.sortOrder)
-        );
-        addToast('Time slot updated!', 'success');
-        return;
+        console.warn('Supabase update time_slots failed:', error.message);
+        addToast(`Could not update time slot: ${error.message}`, 'error');
+        return false;
       }
 
       const updated = normalizeTimeSlot(data);
@@ -357,12 +499,11 @@ export const AppProvider = ({ children }) => {
         prev.map(s => s.id === id ? updated : s).sort((a, b) => a.sortOrder - b.sortOrder)
       );
       addToast('Time slot updated!', 'success');
+      return true;
     } catch (e) {
       console.warn('updateTimeSlot exception:', e);
-      setTimeSlots(prev =>
-        prev.map(s => s.id === id ? { ...s, ...fields } : s).sort((a, b) => a.sortOrder - b.sortOrder)
-      );
-      addToast('Time slot updated!', 'success');
+      addToast('Could not update the time slot. Check your connection and admin access.', 'error');
+      return false;
     }
   };
 
@@ -374,14 +515,19 @@ export const AppProvider = ({ children }) => {
         .eq('id', id);
 
       if (error) {
-        console.warn('Supabase delete time_slots failed (using local fallback):', error.message);
+        console.warn('Supabase delete time_slots failed:', error.message);
+        addToast(`Could not remove time slot: ${error.message}`, 'error');
+        return false;
       }
     } catch (e) {
       console.warn('deleteTimeSlot exception:', e);
+      addToast('Could not remove the time slot. Check your connection and admin access.', 'error');
+      return false;
     }
 
     setTimeSlots(prev => prev.filter(s => s.id !== id));
-    addToast('Time slot removed.', 'warning');
+    addToast('Time slot removed.', 'success');
+    return true;
   };
 
   const toggleTimeSlot = async (id) => {
@@ -421,8 +567,12 @@ export const AppProvider = ({ children }) => {
 
   // Create booking action
   const createBooking = async (paymentData = {}) => {
-    const reference = `#GH${Math.floor(10000000 + Math.random() * 90000000)}`;
-    const endSlot = getEndSlotTime(selectedSlot);
+    if (!user?.name?.trim() || !user?.room?.trim() || !user?.phone?.trim()) {
+      addToast('Complete your name, room number, and mobile number in Profile before booking.', 'warning');
+      setProfileModalOpen(true);
+      return null;
+    }
+    const utr = String(paymentData.utr ?? utrNumber).trim();
 
     // 1. Prevent duplicate / double booking check
     if (isSlotBooked(selectedEquipment.id, selectedDateISO, selectedSlot)) {
@@ -430,68 +580,80 @@ export const AppProvider = ({ children }) => {
       return null;
     }
 
-    // 2. Booking status: UPI must be Pending Verification until verified; Cash is Confirmed with Pending payment
+    // Both methods reserve the slot; UPI payment remains pending admin verification.
     const isUPI = paymentMethod === 'UPI';
-    const initialStatus = isUPI ? 'Pending Verification' : 'Confirmed';
-    const initialPaymentStatus = 'Pending';
-
-    const newBookingRow = {
-      booking_reference: reference,
-      equipment_id: selectedEquipment.id,
-      equipment_name: selectedEquipment.name,
-      booking_date: selectedDateISO,
-      time_range: `${selectedSlot} - ${endSlot}`,
-      slot: selectedSlot,
-      total_amount: selectedEquipment.price,
-      duration: '1 Hour',
-      booking_status: initialStatus,
-      payment_status: initialPaymentStatus,
-      payment_method: paymentMethod,
-      utr: paymentData.utr || utrNumber || null,
-      student_name: user.name,
-      room_no: user.room,
-      pin: Math.floor(1000 + Math.random() * 9000).toString(),
-      proof: paymentProofName || null
-    };
-
-    // Insert into Supabase bookings table
-    const { data, error } = await supabase
-      .from('bookings')
-      .insert([newBookingRow])
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Supabase booking insert error:', error);
-      addToast('Failed to create booking in database. Please try again.', 'error');
+    if (isUPI && !/^\d{4}$/.test(utr)) {
+      addToast('Enter the last 4 digits of your UPI transaction reference.', 'warning');
       return null;
     }
 
-    const inserted = normalizeBooking(data || newBookingRow);
+    const { data, error } = await supabase.functions.invoke('bookings_create', {
+      body: {
+        equipment_id: selectedEquipment.id,
+        date_iso: selectedDateISO,
+        slot: selectedSlot,
+        payment_method: paymentMethod,
+        utr_last4: isUPI ? utr : null,
+        student_name: user.name,
+        room_no: user.room
+      }
+    });
 
-    // Also record payment entry if payments table is used
-    if (isUPI && (paymentData.utr || utrNumber)) {
-      supabase.from('payments').insert([{
-        booking_id: inserted.dbId,
-        payment_method: 'UPI',
-        utr_number: paymentData.utr || utrNumber,
-        payment_proof_path: paymentProofName || null,
-        amount: selectedEquipment.price,
-        payment_status: 'Pending'
-      }]).catch(() => {});
+    if (error || !data?.booking || !data?.booking_access_token) {
+      let backendMessage = data?.error;
+      if (error?.context instanceof Response) {
+        try {
+          const errorBody = await error.context.clone().json();
+          if (typeof errorBody?.error === 'string') backendMessage = errorBody.error;
+        } catch {
+          // Fall back to the generic message below when the function response
+          // is unavailable or not JSON.
+        }
+      }
+      console.error('Booking service request failed:', error?.message || backendMessage || 'Invalid response');
+      const message = backendMessage === 'This slot is already booked'
+        ? 'That slot was just reserved. Choose another time.'
+        : backendMessage === 'Equipment is unavailable'
+          ? 'This equipment is not available. Refresh and choose another rig.'
+          : backendMessage === 'Booking date is outside the allowed window'
+            ? 'Bookings are available for today and the next two days.'
+            : backendMessage === 'This time slot has already started'
+              ? 'That time slot has already started. Choose a later slot.'
+              : backendMessage === 'Booking backend is out of date. Apply the Supabase migrations and redeploy the booking function.'
+                ? 'The booking service needs its latest database update. Contact the site administrator.'
+                : 'Could not save the reservation. Please try again.';
+      addToast(message, 'error');
+      return null;
     }
 
-    setBookings((prev) => [inserted, ...prev]);
-    setLatestBooking(inserted);
+    const inserted = normalizeBooking(data.booking);
+    const confirmationBooking = { ...inserted, bookingAccessToken: data.booking_access_token };
+
+    try {
+      const saved = sessionStorage.getItem('hostel_guest_bookings');
+      const previousGuestBookings = saved ? JSON.parse(saved) : [];
+      const nextGuestBookings = [inserted, ...(Array.isArray(previousGuestBookings) ? previousGuestBookings : [])
+        .filter((booking) => booking.id !== inserted.id)].slice(0, 20);
+      sessionStorage.setItem('hostel_guest_bookings', JSON.stringify(nextGuestBookings));
+      sessionStorage.setItem('hostel_latest_booking', JSON.stringify(confirmationBooking));
+    } catch {
+      // Booking success must not depend on browser session storage being available.
+    }
+    setBookings((prev) => [inserted, ...prev.filter((booking) => booking.id !== inserted.id)]);
+    setLatestBooking(confirmationBooking);
     setCurrentPage('confirmation');
-    addToast(`Booking ${reference} submitted successfully!`, 'success');
+    addToast(`Booking ${inserted.id} submitted successfully!`, 'success');
     return inserted;
   };
 
   // ---------- Admin Actions ----------
   const verifyPayment = async (bookingIdentifier) => {
     const target = bookings.find((b) => b.id === bookingIdentifier || b.dbId === bookingIdentifier);
-    const dbId = target?.dbId || bookingIdentifier;
+    const dbId = target?.dbId;
+    if (!dbId) {
+      addToast('Could not find the reservation to verify.', 'error');
+      return;
+    }
 
     const { error } = await supabase
       .from('bookings')
@@ -499,7 +661,7 @@ export const AppProvider = ({ children }) => {
         payment_status: 'Paid',
         booking_status: 'Confirmed'
       })
-      .or(`id.eq.${dbId},booking_reference.eq.${bookingIdentifier}`);
+      .eq('id', dbId);
 
     if (error) {
       console.error('Error verifying payment in Supabase:', error);
@@ -519,7 +681,11 @@ export const AppProvider = ({ children }) => {
 
   const rejectPayment = async (bookingIdentifier) => {
     const target = bookings.find((b) => b.id === bookingIdentifier || b.dbId === bookingIdentifier);
-    const dbId = target?.dbId || bookingIdentifier;
+    const dbId = target?.dbId;
+    if (!dbId) {
+      addToast('Could not find the reservation to reject.', 'error');
+      return;
+    }
 
     const { error } = await supabase
       .from('bookings')
@@ -527,7 +693,7 @@ export const AppProvider = ({ children }) => {
         payment_status: 'Rejected',
         booking_status: 'Cancelled'
       })
-      .or(`id.eq.${dbId},booking_reference.eq.${bookingIdentifier}`);
+      .eq('id', dbId);
 
     if (error) {
       console.error('Error rejecting payment in Supabase:', error);
@@ -547,21 +713,32 @@ export const AppProvider = ({ children }) => {
 
   const cancelBooking = async (bookingIdentifier) => {
     const target = bookings.find((b) => b.id === bookingIdentifier || b.dbId === bookingIdentifier);
-    const dbId = target?.dbId || bookingIdentifier;
+    const dbId = target?.dbId;
+    if (!dbId) {
+      addToast('Could not find the reservation to cancel.', 'error');
+      return false;
+    }
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('bookings')
         .update({
           booking_status: 'Cancelled'
         })
-        .or(`id.eq.${dbId},booking_reference.eq.${bookingIdentifier}`);
+        .eq('id', dbId)
+        .in('booking_status', ['Confirmed', 'Pending Verification', 'confirmed', 'pending_verification', 'pending_payment'])
+        .select('id')
+        .maybeSingle();
 
-      if (error) {
-        console.warn('Supabase booking cancellation warning:', error);
+      if (error || !data) {
+        console.warn('Supabase booking cancellation failed:', error?.code || 'not updated');
+        addToast('Could not cancel the reservation. Refresh and try again.', 'error');
+        return false;
       }
     } catch (err) {
-      console.warn('Supabase cancellation offline fallback:', err);
+      console.warn('Supabase cancellation failed:', err instanceof Error ? err.name : 'Unknown error');
+      addToast('Could not cancel the reservation. Check your connection and try again.', 'error');
+      return false;
     }
 
     setBookings((prev) =>
@@ -571,45 +748,33 @@ export const AppProvider = ({ children }) => {
           : b
       )
     );
-    addToast(`Booking ${bookingIdentifier} has been cancelled by Admin. Slot is now free.`, 'warning');
+    addToast(`Booking ${bookingIdentifier} has been cancelled. Its slot is available again.`, 'success');
+    return true;
   };
 
   // ---------- Equipment CRUD ----------
   const addEquipment = async (newItem) => {
-    const generatedId = newItem.id || `eq-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
     const assetCode = newItem.assetCode || `EQP-${Math.floor(100 + Math.random() * 900)}`;
     const image = newItem.image || newItem.imageUrl || (
       newItem.type === 'combo' ? '/images/combo-setup.jpg' : newItem.type === 'controller' ? '/images/controller-hero.jpg' : '/images/laptop-hero.jpg'
     );
+    const price = Number(newItem.price);
+    const inventoryCount = Number(newItem.inventoryCount || 1);
+    if (!newItem.name?.trim() || !Number.isFinite(price) || price < 0
+      || !Number.isInteger(inventoryCount) || inventoryCount < 1) {
+      addToast('Enter a name, non-negative price, and positive inventory count.', 'error');
+      return false;
+    }
 
-    const localItem = normalizeEquipment({
-      id: generatedId,
-      name: newItem.name,
-      type: newItem.type || 'laptop',
-      category: newItem.type || 'laptop',
-      price: Number(newItem.price || 50),
-      assetCode,
-      status: newItem.status || 'Available',
-      inventoryCount: newItem.inventoryCount || 1,
-      description: newItem.description || '',
-      specs: newItem.specs || '',
-      image,
-      badge: newItem.badge || (newItem.type === 'combo' ? 'COMBO STATION' : newItem.type === 'controller' ? 'PRO CONTROLLER' : 'GAMING RIG')
-    });
-
-    // Optimistically add to UI first so user and customer UI see it instantly
-    setEquipmentList((prev) => [...prev, localItem]);
-
-    // Backend sync to Supabase
     try {
       const itemToInsert = {
-        name: newItem.name,
+        name: newItem.name.trim(),
         category: newItem.type || 'laptop',
         type: newItem.type || 'laptop',
-        price_per_hour: Number(newItem.price || 50),
+        price_per_hour: price,
         asset_code: assetCode,
         status: newItem.status || 'Available',
-        inventory_count: newItem.inventoryCount || 1,
+        inventory_count: inventoryCount,
         description: newItem.description || '',
         specs: newItem.specs || '',
         image_url: image
@@ -622,106 +787,103 @@ export const AppProvider = ({ children }) => {
         .single();
 
       if (error) {
-        console.warn('Supabase add equipment with image_url failed, attempting without image_url:', error.message);
-        // Fallback in case image_url column isn't in remote schema yet
-        const { data: fallbackData } = await supabase
-          .from('equipment')
-          .insert([{
-            name: newItem.name,
-            category: newItem.type || 'laptop',
-            type: newItem.type || 'laptop',
-            price_per_hour: Number(newItem.price || 50),
-            asset_code: assetCode,
-            status: newItem.status || 'Available',
-            inventory_count: newItem.inventoryCount || 1,
-            description: newItem.description || '',
-            specs: newItem.specs || ''
-          }])
-          .select()
-          .single();
-
-        if (fallbackData) {
-          setEquipmentList((prev) =>
-            prev.map(it => it.id === generatedId ? { ...normalizeEquipment(fallbackData), image } : it)
-          );
-        }
-      } else if (data) {
-        const synced = normalizeEquipment({ ...data, image });
-        setEquipmentList((prev) =>
-          prev.map(it => it.id === generatedId ? synced : it)
-        );
+        console.error('Supabase equipment insert failed:', error.code ?? 'unknown');
+        addToast('Could not save the equipment. Check your connection and admin access.', 'error');
+        return false;
       }
-    } catch (e) {
-      console.warn('Exception during addEquipment sync:', e);
-    }
 
-    addToast(`${newItem.name} added to fleet with custom hardware photo!`, 'success');
+      if (!data) {
+        addToast('The equipment was not returned by the database. Refresh and check the inventory.', 'error');
+        return false;
+      }
+      setEquipmentList((prev) => [...prev, normalizeEquipment({ ...data, image })]);
+      addToast(`${newItem.name.trim()} added to the fleet.`, 'success');
+      return true;
+    } catch (e) {
+      console.error('Equipment insert request failed:', e instanceof Error ? e.name : 'Unknown error');
+      addToast('Could not save the equipment. Check your connection and admin access.', 'error');
+      return false;
+    }
   };
 
   const updateEquipment = async (id, updatedFields) => {
     const updatedImage = updatedFields.image || updatedFields.imageUrl;
-
-    setEquipmentList((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              ...updatedFields,
-              ...(updatedImage && { image: updatedImage })
-            }
-          : item
-      )
-    );
-
     try {
       const fieldsToUpdate = {
-        ...(updatedFields.name && { name: updatedFields.name }),
-        ...(updatedFields.type && { type: updatedFields.type, category: updatedFields.type }),
-        ...(updatedFields.price && { price_per_hour: Number(updatedFields.price) }),
-        ...(updatedFields.status && { status: updatedFields.status }),
-        ...(updatedFields.description && { description: updatedFields.description }),
-        ...(updatedFields.specs && { specs: updatedFields.specs }),
-        ...(updatedFields.assetCode && { asset_code: updatedFields.assetCode }),
-        ...(updatedImage && { image_url: updatedImage }),
+        ...(updatedFields.name !== undefined && { name: updatedFields.name.trim() }),
+        ...(updatedFields.type !== undefined && { type: updatedFields.type, category: updatedFields.type }),
+        ...(updatedFields.price !== undefined && { price_per_hour: Number(updatedFields.price) }),
+        ...(updatedFields.status !== undefined && { status: updatedFields.status }),
+        ...(updatedFields.description !== undefined && { description: updatedFields.description }),
+        ...(updatedFields.specs !== undefined && { specs: updatedFields.specs }),
+        ...(updatedFields.assetCode !== undefined && { asset_code: updatedFields.assetCode }),
+        ...(updatedFields.inventoryCount !== undefined && { inventory_count: Number(updatedFields.inventoryCount) }),
+        ...(updatedImage !== undefined && { image_url: updatedImage }),
         updated_at: new Date().toISOString()
       };
+      if (fieldsToUpdate.name !== undefined && !fieldsToUpdate.name) {
+        addToast('Equipment name cannot be empty.', 'error');
+        return false;
+      }
+      if (fieldsToUpdate.price_per_hour !== undefined
+        && (!Number.isFinite(fieldsToUpdate.price_per_hour) || fieldsToUpdate.price_per_hour < 0)) {
+        addToast('Enter a valid non-negative hourly price.', 'error');
+        return false;
+      }
+      if (fieldsToUpdate.inventory_count !== undefined
+        && (!Number.isInteger(fieldsToUpdate.inventory_count) || fieldsToUpdate.inventory_count < 1)) {
+        addToast('Inventory count must be a positive whole number.', 'error');
+        return false;
+      }
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('equipment')
         .update(fieldsToUpdate)
-        .eq('id', id);
+        .eq('id', id)
+        .select()
+        .single();
 
-      if (error) {
-        console.warn('Supabase update failed, retrying without image_url:', error.message);
-        delete fieldsToUpdate.image_url;
-        await supabase
-          .from('equipment')
-          .update(fieldsToUpdate)
-          .eq('id', id);
+      if (error || !data) {
+        console.error('Equipment update failed:', error?.code ?? 'no row returned');
+        addToast('Could not update equipment. Refresh and try again.', 'error');
+        return false;
       }
-    } catch (e) {
-      console.warn('Exception updating equipment:', e);
-    }
 
-    addToast('Equipment details and photo updated!', 'success');
+      setEquipmentList((prev) => prev.map((item) => item.id === id
+        ? normalizeEquipment({ ...data, image: updatedImage || data.image_url })
+        : item));
+      addToast('Equipment details and photo updated.', 'success');
+      return true;
+    } catch (e) {
+      console.error('Equipment update request failed:', e instanceof Error ? e.name : 'Unknown error');
+      addToast('Could not update equipment. Check your connection and admin access.', 'error');
+      return false;
+    }
   };
 
   const deleteEquipment = async (id) => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('equipment')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .select('id')
+        .maybeSingle();
 
-      if (error) {
-        console.warn('Supabase delete equipment error:', error);
+      if (error || !data) {
+        console.error('Equipment delete failed:', error?.code ?? 'no row deleted');
+        addToast('Could not delete equipment. Refresh and try again.', 'error');
+        return false;
       }
     } catch (e) {
-      console.warn('Exception during deleteEquipment:', e);
+      console.error('Equipment delete request failed:', e instanceof Error ? e.name : 'Unknown error');
+      addToast('Could not delete equipment. Check your connection and admin access.', 'error');
+      return false;
     }
 
     setEquipmentList((prev) => prev.filter((item) => item.id !== id));
-    addToast('Equipment deleted from inventory.', 'error');
+    addToast('Equipment deleted from inventory.', 'success');
+    return true;
   };
 
   return (
@@ -731,6 +893,12 @@ export const AppProvider = ({ children }) => {
         setCurrentPage,
         adminSubPage,
         setAdminSubPage,
+        authSession,
+        authProfile,
+        authLoading: !authSessionReady || authProfileLoading,
+        authProfileError,
+        signInAdmin,
+        signOutAdmin,
         selectedEquipment,
         setSelectedEquipment,
         selectedDate,
@@ -753,6 +921,8 @@ export const AppProvider = ({ children }) => {
         activeTimeSlotLabels,
         user,
         setUser,
+        profileModalOpen,
+        setProfileModalOpen,
         toasts,
         addToast,
         createBooking,

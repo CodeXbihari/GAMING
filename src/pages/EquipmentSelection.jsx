@@ -104,15 +104,13 @@ export const EquipmentSelection = () => {
             <div
               key={card.id}
               onClick={() => handleSelect(card)}
-              className={`relative flex flex-col justify-between rounded-3xl p-5 sm:p-6 lg:p-5 xl:p-7 transition-all duration-300 cursor-pointer group ${
+              className={`rig-card relative flex flex-col justify-between rounded-3xl p-5 sm:p-6 lg:p-5 xl:p-7 transition-all duration-300 cursor-pointer group ${
                 isMaintenance
                   ? 'glass-panel opacity-75 border-amber-500/30'
-                  : isHero
-                  ? 'glass-panel-lime hover:scale-[1.02]'
-                  : 'glass-panel hover:border-[#C6FF00]/60 hover:shadow-lime-sm'
+                  : 'glass-panel hover:scale-[1.02]'
               } ${
                 isSelected && !isMaintenance
-                  ? 'ring-2 ring-[#C6FF00] border-[#C6FF00] shadow-lime-glow'
+                  ? 'ring-2 ring-[#C6FF00] border-[#C6FF00]'
                   : ''
               }`}
             >
@@ -181,7 +179,7 @@ export const EquipmentSelection = () => {
                   )}
 
                   {/* Neon Lime underglow */}
-                  <div className="absolute inset-0 bg-radial from-[#C6FF00]/15 via-transparent to-black/60 pointer-events-none" />
+                  <div className="absolute inset-0 bg-radial from-[#C6FF00]/15 via-transparent to-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
                 </div>
 
                 {/* Card Title & Description */}

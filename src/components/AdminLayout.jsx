@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { ToastContainer } from './Toast';
 import {
   LayoutDashboard,
   Gamepad2,
@@ -19,7 +20,7 @@ import {
 } from 'lucide-react';
 
 export const AdminLayout = ({ children }) => {
-  const { adminSubPage, setAdminSubPage, setCurrentPage } = useApp();
+  const { adminSubPage, setAdminSubPage, setCurrentPage, signOutAdmin } = useApp();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navItems = [
@@ -130,7 +131,7 @@ export const AdminLayout = ({ children }) => {
           </button>
 
           <button
-            onClick={() => setCurrentPage('home')}
+            onClick={signOutAdmin}
             className="w-full flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-[#687366] hover:text-[#FF453A] transition-colors"
           >
             <LogOut className="w-3.5 h-3.5" />
@@ -143,6 +144,7 @@ export const AdminLayout = ({ children }) => {
       <main className="flex-1 min-w-0 p-5 sm:p-8 lg:p-10 overflow-y-auto">
         {children}
       </main>
+      <ToastContainer />
     </div>
   );
 };

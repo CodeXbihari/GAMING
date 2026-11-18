@@ -1,90 +1,81 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+const corsHeaders = {
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+const respond = (body: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  });
+
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST') return respond({ error: 'Method not allowed' }, 405);
+
   try {
-    const authHeader = req.headers.get('Authorization') ?? '';
-    const jwt = authHeader.replace('Bearer ', '');
+    const tokenMatch = /^Bearer\s+(.+)$/i.exec(req.headers.get('Authorization') ?? '');
+    if (!tokenMatch) return respond({ error: 'Unauthorized' }, 401);
 
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-    );
-
-    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(jwt);
-    if (authErr || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error('Payment verification service is missing server configuration');
+      return respond({ error: 'Payment verification is not configured' }, 503);
+    }
+    const contentLength = Number(req.headers.get('content-length') ?? 0);
+    if (contentLength > 4096) return respond({ error: 'Request is too large' }, 413);
+    const rawBody = await req.text();
+    if (rawBody.length > 4096) return respond({ error: 'Request is too large' }, 413);
+    const payload = JSON.parse(rawBody);
+    const bookingId = typeof payload?.booking_id === 'string' ? payload.booking_id.trim() : '';
+    const newStatus = payload?.new_status;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(bookingId)
+      || !['Paid', 'Rejected'].includes(newStatus)) {
+      return respond({ error: 'A booking ID and valid payment decision are required' }, 400);
     }
 
-    const { data: profile } = await supabaseAdmin
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data: { user }, error: authError } = await admin.auth.getUser(tokenMatch[1]);
+    if (authError || !user) return respond({ error: 'Unauthorized' }, 401);
+    const { data: profile, error: profileError } = await admin
       .from('profiles')
       .select('role')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
+    if (profileError) return respond({ error: 'Could not verify account permissions' }, 503);
+    if (profile?.role !== 'admin') return respond({ error: 'Admin access required' }, 403);
 
-    if (profile?.role !== 'admin') {
-      return new Response(JSON.stringify({ error: 'Admin access required' }), { status: 403 });
-    }
-
-    const { booking_id, new_status } = await req.json();
-    if (!booking_id || !['Paid', 'Rejected'].includes(new_status)) {
-      return new Response(JSON.stringify({ error: 'booking_id and new_status (Paid|Rejected) required' }), { status: 400 });
-    }
-
-    // Update booking payment status
-    const { data: booking, error: updateErr } = await supabaseAdmin
+    const nextBookingStatus = newStatus === 'Paid' ? 'Confirmed' : 'Cancelled';
+    const { data: booking, error: updateError } = await admin
       .from('bookings')
-      .update({
-        payment_status: new_status,
-        status: new_status === 'Rejected' ? 'Cancelled' : 'Confirmed',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', booking_id)
-      .select('student_name, equipment_name, slot, date')
-      .single();
-
-    if (updateErr) {
-      return new Response(JSON.stringify({ error: updateErr.message }), { status: 400 });
+      .update({ payment_status: newStatus, booking_status: nextBookingStatus })
+      .eq('id', bookingId)
+      .eq('payment_status', 'Pending')
+      .select('id, booking_reference')
+      .maybeSingle();
+    if (updateError) {
+      console.error('Could not update payment decision:', updateError.code ?? 'unknown');
+      return respond({ error: 'Could not update payment status' }, 503);
     }
+    if (!booking) return respond({ error: 'Booking not found or payment was already reviewed' }, 409);
 
-    // Log admin action
-    await supabaseAdmin.from('audit_logs').insert({
+    const { error: auditError } = await admin.from('audit_logs').insert({
       admin_id: user.id,
       action: 'verify_payment',
       target_table: 'bookings',
-      target_id: booking_id,
-      details: { new_status, adminEmail: user.email },
+      target_id: booking.id,
+      details: { new_status: newStatus },
     });
+    if (auditError) console.error('Could not write payment audit event:', auditError.code ?? 'unknown');
 
-    // Send email notification (fire and forget – don't block response on it)
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    fetch(`${supabaseUrl}/functions/v1/notifications_send`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-      },
-      body: JSON.stringify({
-        to: booking.student_name, // treated as email here; adjust if separate email field
-        subject: new_status === 'Paid'
-          ? `Payment confirmed – Booking #${booking_id}`
-          : `Payment rejected – Booking #${booking_id}`,
-        template: 'payment_status',
-        vars: {
-          student_name: booking.student_name,
-          booking_id,
-          status: new_status,
-          equipment_name: booking.equipment_name,
-          slot: booking.slot,
-          date: booking.date,
-        },
-      }),
-    }).catch(() => {/* ignore notification errors */});
-
-    return new Response(JSON.stringify({ message: `Payment ${new_status.toLowerCase()} successfully` }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message ?? 'Internal error' }), { status: 500 });
+    return respond({ message: `Payment ${newStatus.toLowerCase()} successfully`, booking_reference: booking.booking_reference });
+  } catch (error) {
+    console.error('Payment verification failed:', error instanceof Error ? error.name : 'Unknown error');
+    return respond({ error: 'Could not process payment verification' }, 500);
   }
 });

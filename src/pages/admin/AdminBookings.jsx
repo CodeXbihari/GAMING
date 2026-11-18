@@ -1,20 +1,46 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { supabase } from '../../lib/supabase';
 import { Calendar, Clock, Search, Filter, CheckCircle, AlertTriangle, Crosshair, Terminal, Ban, X } from 'lucide-react';
 import { EquipmentVisual } from '../../components/EquipmentVisual';
 
 export const AdminBookings = () => {
   const { bookings, verifyPayment, cancelBooking } = useApp();
+  const [gameRequests, setGameRequests] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [cancelTarget, setCancelTarget] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    const loadGameRequests = async () => {
+      const { data, error } = await supabase
+        .from('game_download_requests')
+        .select('booking_reference, wants_download, game_name, notification_sent');
+      if (!active) return;
+      if (error) {
+        console.error('Could not load game download requests:', error);
+        return;
+      }
+      setGameRequests(Object.fromEntries((data || []).map((request) => [request.booking_reference, request])));
+    };
+
+    loadGameRequests();
+    const refreshInterval = window.setInterval(loadGameRequests, 30000);
+
+    return () => {
+      active = false;
+      window.clearInterval(refreshInterval);
+    };
+  }, []);
 
   const filtered = bookings.filter((b) => {
     const matchesSearch =
       b.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       b.equipmentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (b.studentName && b.studentName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (b.utr && b.utr.includes(searchTerm));
+      (b.utr && b.utr.includes(searchTerm)) ||
+      (gameRequests[b.id]?.game_name || '').toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = filterStatus === 'All' || b.status === filterStatus;
     return matchesSearch && matchesStatus;
@@ -51,7 +77,7 @@ export const AdminBookings = () => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by ID, equipment, student, UTR..."
+            placeholder="Search by ID, equipment, student, UPI last 4..."
             className="w-full bg-[#171D18] border border-white/[0.1] rounded-2xl pl-11 pr-4 py-3 text-xs text-[#F5F7F2] placeholder-[#687366] focus:outline-none focus:border-[#C6FF00] font-mono"
           />
         </div>
@@ -87,6 +113,7 @@ export const AdminBookings = () => {
                 <th className="py-4 px-6">AMOUNT</th>
                 <th className="py-4 px-6">STATUS</th>
                 <th className="py-4 px-6">METHOD</th>
+                <th className="py-4 px-6">GAME DOWNLOAD</th>
                 <th className="py-4 px-6 text-right">ACTION</th>
               </tr>
             </thead>
@@ -134,6 +161,22 @@ export const AdminBookings = () => {
                     <span className="text-[10px] px-2.5 py-1 rounded-full bg-[#171D18] border border-white/[0.08] text-[#C6FF00] font-black uppercase">
                       {b.paymentMethod || 'UPI'}
                     </span>
+                  </td>
+                  <td className="py-4 px-6 text-[11px] text-[#9EA79C]">
+                    {gameRequests[b.id] ? (
+                      gameRequests[b.id].wants_download ? (
+                        <div>
+                          <div className="font-black text-[#C6FF00]">YES · {gameRequests[b.id].game_name}</div>
+                          <div className="mt-1 text-[9px] uppercase tracking-wider text-[#687366]">
+                            {gameRequests[b.id].notification_sent ? 'ADMIN EMAIL SENT' : 'SAVED · EMAIL NOT SENT'}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-[#687366]">NO DOWNLOAD REQUEST</span>
+                      )
+                    ) : (
+                      <span className="text-[#687366]">NOT ANSWERED</span>
+                    )}
                   </td>
                   <td className="py-4 px-6 text-right">
                     {b.status === 'Cancelled' ? (
@@ -229,9 +272,9 @@ export const AdminBookings = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  cancelBooking(cancelTarget.id);
-                  setCancelTarget(null);
+                onClick={async () => {
+                  const cancelled = await cancelBooking(cancelTarget.id);
+                  if (cancelled) setCancelTarget(null);
                 }}
                 className="flex-1 py-3 rounded-full bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all cursor-pointer"
               >

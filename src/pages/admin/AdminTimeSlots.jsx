@@ -70,12 +70,13 @@ export const AdminTimeSlots = () => {
       return;
     }
 
+    let saved;
     if (editingItem) {
-      await updateTimeSlot(editingItem.id, formData);
+      saved = await updateTimeSlot(editingItem.id, formData);
     } else {
-      await addTimeSlot(formData);
+      saved = await addTimeSlot(formData);
     }
-    setModalOpen(false);
+    if (saved) setModalOpen(false);
   };
 
   return (

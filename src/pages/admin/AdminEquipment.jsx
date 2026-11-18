@@ -91,7 +91,7 @@ export const AdminEquipment = () => {
     addToast(`Applied ${preset.label} photo preset!`, 'success');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name.trim()) {
       addToast('Please enter an equipment name.', 'warning');
@@ -105,12 +105,10 @@ export const AdminEquipment = () => {
       )
     };
 
-    if (editingItem) {
-      updateEquipment(editingItem.id, payload);
-    } else {
-      addEquipment(payload);
-    }
-    setModalOpen(false);
+    const saved = editingItem
+      ? await updateEquipment(editingItem.id, payload)
+      : await addEquipment(payload);
+    if (saved) setModalOpen(false);
   };
 
   return (

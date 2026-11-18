@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { Calendar, Clock, ArrowRight, X, Download, ShieldCheck, KeyRound, Crosshair, Terminal } from 'lucide-react';
 
 export const MyBookings = () => {
-  const { bookings, addToast } = useApp();
+  const { bookings } = useApp();
   const [activeTab, setActiveTab] = useState('upcoming');
   const [selectedBookingModal, setSelectedBookingModal] = useState(null);
 
@@ -40,7 +40,7 @@ export const MyBookings = () => {
 
         <div className="text-xs font-mono text-[#9EA79C] flex items-center gap-2">
           <span>HOSTEL_LOCATION: </span>
-          <span className="px-2.5 py-0.5 rounded-full glass-pill text-[#C6FF00] font-bold">BLOCK-B GROUND FLOOR</span>
+          <span className="px-2.5 py-0.5 rounded-full glass-pill text-[#C6FF00] font-bold">ROOM 207</span>
         </div>
       </div>
 
@@ -183,17 +183,14 @@ export const MyBookings = () => {
             </div>
 
             <div className="p-3.5 rounded-xl bg-[#080A08] border border-white/[0.06] text-[11px] text-[#9EA79C] leading-relaxed">
-              Present this pass at <span className="text-[#C6FF00] font-bold">Ground Floor Block B Lounge</span> to launch your session.
+              Present this pass at <span className="text-[#C6FF00] font-bold">ROOM 207</span> to launch your session.
             </div>
 
             <button
-              onClick={() => {
-                addToast('Booking pass verified & active', 'success');
-                setSelectedBookingModal(null);
-              }}
+              onClick={() => setSelectedBookingModal(null)}
               className="w-full py-3.5 rounded-full bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-black text-xs tracking-wider uppercase shadow-lime-sm transition-all"
             >
-              READY FOR COLLECTION
+              CLOSE PASS
             </button>
           </div>
         </div>

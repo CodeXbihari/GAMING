@@ -1,13 +1,3 @@
-# Environment variables
-.env
-.env*.local
-.env.production
-query.json
-supabase/.temp/
-*.ps1
-deploy_api.ps1
-deploy_functions.ps1
-
 # Logs
 logs
 *.log
@@ -21,6 +11,9 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+.env.*
+!.env.example
 
 # Editor directories and files
 .vscode/*

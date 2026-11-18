@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Gamepad2, User, ShieldCheck, Menu, X, ArrowUpRight } from 'lucide-react';
+import { User, ShieldCheck, Menu, X, ArrowUpRight } from 'lucide-react';
 
 export const Navbar = () => {
-  const { currentPage, setCurrentPage, user, setUser } = useApp();
+  const { currentPage, setCurrentPage, user, setUser, profileModalOpen, setProfileModalOpen } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const isHome = currentPage === 'home';
 
@@ -24,13 +23,7 @@ export const Navbar = () => {
             onClick={() => setCurrentPage('home')}
             className="flex items-center gap-3 text-left focus:outline-none group"
           >
-            <div className="w-8 h-8 rounded-lg bg-[#111512]/90 border border-[#C6FF00]/40 flex items-center justify-center text-[#C6FF00] shadow-lime-sm group-hover:scale-105 group-hover:border-[#C6FF00] group-hover:shadow-lime-glow transition-all">
-              <Gamepad2 className="w-4 h-4" />
-            </div>
-            <div className="font-extrabold text-sm tracking-tight text-[#F5F7F2] leading-tight">
-              <span className="group-hover:text-[#C6FF00] transition-colors">HOSTEL</span>
-              <span className="block text-[10px] text-[#9EA79C] uppercase tracking-widest font-semibold">GAMING HUB</span>
-            </div>
+            <img src="/images/hostel-gaming-hub-logo.svg" alt="Hostel Gaming Hub" className="w-[88px] sm:w-[104px] h-[60px] object-contain transition-transform group-hover:scale-[1.03]" />
           </button>
 
           {/* Desktop Nav Pills matching reference */}
@@ -91,7 +84,7 @@ export const Navbar = () => {
               </button>
             ) : (
               <button
-                onClick={() => setAuthModalOpen(true)}
+                onClick={() => setProfileModalOpen(true)}
                 className="hidden sm:inline-flex glass-pill hover:bg-white/[0.08] text-[#F5F7F2] font-semibold text-xs px-3.5 py-1.5 rounded-full transition-all"
               >
                 Profile
@@ -134,11 +127,11 @@ export const Navbar = () => {
       </header>
 
       {/* Login / Profile Modal */}
-      {authModalOpen && (
+      {profileModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
           <div className="glass-modal rounded-3xl p-6 max-w-xs w-full relative text-xs">
             <button 
-              onClick={() => setAuthModalOpen(false)}
+              onClick={() => setProfileModalOpen(false)}
               className="absolute top-4 right-4 text-[#9EA79C] hover:text-[#F5F7F2]"
             >
               <X className="w-4 h-4" />
@@ -168,8 +161,21 @@ export const Navbar = () => {
                 />
               </div>
 
+              <div>
+                <label className="block text-[#9EA79C] mb-1 font-semibold uppercase tracking-wider text-[10px]">Mobile Number</label>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={user.phone || ''}
+                  onChange={(e) => setUser({ ...user, phone: e.target.value })}
+                  className="w-full glass-input rounded-xl px-3.5 py-2 text-[#F5F7F2] focus:outline-none"
+                  placeholder="Enter mobile number"
+                />
+              </div>
+
               <button
-                onClick={() => setAuthModalOpen(false)}
+                onClick={() => setProfileModalOpen(false)}
                 className="w-full mt-2 py-2.5 rounded-xl bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-extrabold tracking-wide shadow-lime-glow transition-all"
               >
                 Save & Close

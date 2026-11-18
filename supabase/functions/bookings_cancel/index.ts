@@ -1,84 +1,107 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+const respond = (body: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  });
+
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST') return respond({ error: 'Method not allowed' }, 405);
+
   try {
     const authHeader = req.headers.get('Authorization') ?? '';
-    const jwt = authHeader.replace('Bearer ', '');
+    const tokenMatch = /^Bearer\s+(.+)$/i.exec(authHeader);
+    if (!tokenMatch) return respond({ error: 'Unauthorized' }, 401);
 
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-    );
-
-    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(jwt);
-    if (authErr || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error('Booking cancellation service is missing server configuration');
+      return respond({ error: 'Cancellation service is not configured' }, 503);
     }
 
-    const { data: profile } = await supabaseAdmin
+    const declaredSize = Number(req.headers.get('content-length') ?? 0);
+    if (declaredSize > 4096) return respond({ error: 'Request is too large' }, 413);
+    const rawBody = await req.text();
+    if (rawBody.length > 4096) return respond({ error: 'Request is too large' }, 413);
+    const payload = JSON.parse(rawBody);
+    const bookingId = typeof payload?.booking_id === 'string' ? payload.booking_id.trim() : '';
+    if (!bookingId || bookingId.length > 100) return respond({ error: 'A booking ID is required' }, 400);
+
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data: { user }, error: authError } = await admin.auth.getUser(tokenMatch[1]);
+    if (authError || !user) return respond({ error: 'Unauthorized' }, 401);
+
+    const { data: profile, error: profileError } = await admin
       .from('profiles')
       .select('role')
       .eq('id', user.id)
-      .single();
-
-    const isAdmin = profile?.role === 'admin';
-    const isStudent = profile?.role === 'student';
-
-    if (!isAdmin && !isStudent) {
-      return new Response(JSON.stringify({ error: 'Unauthorized role' }), { status: 403 });
+      .maybeSingle();
+    if (profileError) return respond({ error: 'Could not verify account permissions' }, 503);
+    if (!profile || !['admin', 'student'].includes(profile.role)) {
+      return respond({ error: 'Account is not allowed to cancel bookings' }, 403);
     }
 
-    const { booking_id } = await req.json();
-    if (!booking_id) {
-      return new Response(JSON.stringify({ error: 'booking_id required' }), { status: 400 });
-    }
-
-    const { data: booking, error: fetchErr } = await supabaseAdmin
+    const lookupColumn = /^#?GH\d{8}$/.test(bookingId) ? 'booking_reference' : 'id';
+    const { data: booking, error: bookingError } = await admin
       .from('bookings')
-      .select('status, date_iso, slot, student_name')
-      .eq('id', booking_id)
-      .single();
+      .select('id, student_id, booking_date, start_time, booking_status')
+      .eq(lookupColumn, bookingId.replace(/^#/, ''))
+      .maybeSingle();
+    if (bookingError) return respond({ error: 'Could not load the reservation' }, 503);
+    if (!booking) return respond({ error: 'Booking not found' }, 404);
 
-    if (fetchErr || !booking) {
-      return new Response(JSON.stringify({ error: 'Booking not found' }), { status: 404 });
+    const isAdmin = profile.role === 'admin';
+    if (!isAdmin && booking.student_id !== user.id) {
+      return respond({ error: 'You can only cancel your own reservation' }, 403);
+    }
+    const activeStatuses = ['Confirmed', 'Pending Verification', 'confirmed', 'pending_verification', 'pending_payment'];
+    if (!activeStatuses.includes(booking.booking_status)) {
+      return respond({ error: 'This reservation can no longer be cancelled' }, 409);
     }
 
-    // Students can only cancel their own bookings, >30 min before slot
-    if (isStudent) {
-      if (booking.student_name !== user.email) {
-        return new Response(JSON.stringify({ error: 'Cannot cancel another student\'s booking' }), { status: 403 });
-      }
-      const slotDate = new Date(`${booking.date_iso}T${booking.slot}`);
-      const diffMins = (slotDate.getTime() - Date.now()) / (1000 * 60);
-      if (diffMins < 30) {
-        return new Response(JSON.stringify({ error: 'Cancellation window has passed (30 min before slot)' }), { status: 400 });
+    if (!isAdmin) {
+      if (!booking.start_time) return respond({ error: 'Cancellation time could not be verified' }, 409);
+      const startsAt = new Date(`${booking.booking_date}T${booking.start_time}+05:30`).getTime();
+      if (!Number.isFinite(startsAt) || (startsAt - Date.now()) / 60_000 < 30) {
+        return respond({ error: 'Cancellation is available until 30 minutes before the session' }, 400);
       }
     }
 
-    const { error: updErr } = await supabaseAdmin
+    const { data: updated, error: updateError } = await admin
       .from('bookings')
-      .update({ status: 'Cancelled', updated_at: new Date().toISOString() })
-      .eq('id', booking_id);
-
-    if (updErr) {
-      return new Response(JSON.stringify({ error: updErr.message }), { status: 400 });
-    }
+      .update({ booking_status: 'Cancelled' })
+      .eq('id', booking.id)
+      .eq('booking_status', booking.booking_status)
+      .select('id')
+      .maybeSingle();
+    if (updateError) return respond({ error: 'Could not cancel the reservation' }, 503);
+    if (!updated) return respond({ error: 'Reservation status changed; refresh and try again' }, 409);
 
     if (isAdmin) {
-      await supabaseAdmin.from('audit_logs').insert({
+      const { error: auditError } = await admin.from('audit_logs').insert({
         admin_id: user.id,
         action: 'cancel_booking',
         target_table: 'bookings',
-        target_id: booking_id,
-        details: { cancelledBy: 'admin', adminEmail: user.email },
+        target_id: booking.id,
+        details: { cancelledBy: 'admin' },
       });
+      if (auditError) console.error('Could not write cancellation audit event:', auditError.code ?? 'unknown');
     }
 
-    return new Response(JSON.stringify({ message: 'Booking cancelled successfully' }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message ?? 'Internal error' }), { status: 500 });
+    return respond({ message: 'Booking cancelled successfully' });
+  } catch (error) {
+    console.error('Booking cancellation failed:', error instanceof Error ? error.name : 'Unknown error');
+    return respond({ error: 'Could not process the cancellation' }, 500);
   }
 });

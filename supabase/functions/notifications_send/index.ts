@@ -1,9 +1,29 @@
 Deno.serve(async (req) => {
   try {
-    const { to, subject, template, vars } = await req.json();
+    if (req.method !== 'POST') {
+      return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 });
+    }
 
-    if (!to || !subject) {
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!serviceRoleKey) {
+      console.error('Notification service is missing server configuration');
+      return new Response(JSON.stringify({ error: 'Notification service is not configured' }), { status: 503 });
+    }
+    if (req.headers.get('Authorization') !== `Bearer ${serviceRoleKey}`) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+    }
+
+    const rawBody = await req.text();
+    if (rawBody.length > 16_384) {
+      return new Response(JSON.stringify({ error: 'Request is too large' }), { status: 413 });
+    }
+    const { to, subject, template, vars } = JSON.parse(rawBody);
+
+    if (typeof to !== 'string' || to.length > 320 || typeof subject !== 'string' || subject.length > 200) {
       return new Response(JSON.stringify({ error: 'to and subject are required' }), { status: 400 });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      return new Response(JSON.stringify({ error: 'A valid recipient email is required' }), { status: 400 });
     }
 
     // Render email body from template
@@ -70,7 +90,7 @@ Your booking #${data.booking_id} has been cancelled. The slot is now available f
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err: any) {
-    console.error('Notification error:', err.message);
-    return new Response(JSON.stringify({ error: err.message ?? 'Failed to send notification' }), { status: 500 });
+    console.error('Notification send failed:', err instanceof Error ? err.name : 'Unknown error');
+    return new Response(JSON.stringify({ error: 'Failed to send notification' }), { status: 500 });
   }
 });

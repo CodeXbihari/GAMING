@@ -1,120 +1,215 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+const jsonResponse = (body: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  });
+
+const dateInIndia = (date: Date) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+};
+
+const addDays = (dateISO: string, days: number) => {
+  const date = new Date(`${dateISO}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
+const randomNumber = (min: number, max: number) => {
+  const value = new Uint32Array(1);
+  crypto.getRandomValues(value);
+  return min + (value[0] % (max - min));
+};
+
+const randomHexToken = (length = 32) => {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+};
+
+const sha256Hex = async (value: string) => {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+};
+
+const schemaError = (error: { code?: string } | null) =>
+  ['PGRST204', 'PGRST205', '42703', '42P01'].includes(error?.code ?? '');
+
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
+
   try {
-    // ── Auth: read JWT from Authorization header ──────────────────────────
-    const authHeader = req.headers.get('Authorization') ?? '';
-    const jwt = authHeader.replace('Bearer ', '');
+    const declaredSize = Number(req.headers.get('content-length') ?? 0);
+    if (declaredSize > 8192) return jsonResponse({ error: 'Request is too large' }, 413);
+    const rawBody = await req.text();
+    if (rawBody.length > 8192) return jsonResponse({ error: 'Request is too large' }, 413);
 
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-    );
-
-    // Verify the JWT and get the user
-    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(jwt);
-    if (authErr || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+    const payload = JSON.parse(rawBody);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return jsonResponse({ error: 'Invalid booking request' }, 400);
     }
 
-    // Check role from profiles table
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
+    const equipmentId = typeof payload.equipment_id === 'string' ? payload.equipment_id.trim() : '';
+    const dateISO = typeof payload.date_iso === 'string' ? payload.date_iso.trim() : '';
+    const slot = typeof payload.slot === 'string' ? payload.slot.trim() : '';
+    const paymentMethod = payload.payment_method ?? 'UPI';
+    const utrLast4 = String(payload.utr_last4 ?? '').trim();
+    const studentName = typeof payload.student_name === 'string' ? payload.student_name.trim() : '';
+    const roomNo = typeof payload.room_no === 'string' ? payload.room_no.trim() : '';
 
-    if (!profile || profile.role !== 'student') {
-      return new Response(JSON.stringify({ error: 'Only students can create bookings' }), { status: 403 });
+    if (!equipmentId || equipmentId.length > 100 || !slot || slot.length > 32) {
+      return jsonResponse({ error: 'Choose valid equipment and a time slot' }, 400);
+    }
+    const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(dateISO)
+      ? new Date(`${dateISO}T00:00:00.000Z`)
+      : null;
+    if (!parsedDate || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== dateISO) {
+      return jsonResponse({ error: 'Choose a valid booking date' }, 400);
+    }
+    if (!['UPI', 'Cash'].includes(paymentMethod)) {
+      return jsonResponse({ error: 'Choose UPI or cash payment' }, 400);
+    }
+    if (paymentMethod === 'UPI' && !/^\d{4}$/.test(utrLast4)) {
+      return jsonResponse({ error: 'Enter the last 4 digits of the UPI reference' }, 400);
+    }
+    if (studentName.length > 120 || roomNo.length > 40 || /[\u0000-\u001f\u007f]/.test(`${studentName}${roomNo}`)) {
+      return jsonResponse({ error: 'Enter valid booking contact details' }, 400);
     }
 
-    // ── Parse payload ─────────────────────────────────────────────────────
-    const payload = await req.json();
-    const {
-      equipment_id,
-      date_iso,
-      slot,
-      payment_method = 'UPI',
-      student_name,
-      room_no,
-      pin,
-    } = payload;
-
-    if (!equipment_id || !date_iso || !slot) {
-      return new Response(JSON.stringify({ error: 'Missing required fields: equipment_id, date_iso, slot' }), { status: 400 });
+    const today = dateInIndia(new Date());
+    if (dateISO < today || dateISO > addDays(today, 2)) {
+      return jsonResponse({ error: 'Booking date is outside the allowed window' }, 400);
     }
 
-    // ── Get equipment (price & name) ──────────────────────────────────────
-    const { data: equip, error: equipErr } = await supabaseAdmin
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error('Booking service is missing server configuration');
+      return jsonResponse({ error: 'Booking service is not configured' }, 503);
+    }
+
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const { data: configuredSlots, error: slotsError } = await admin
+      .from('time_slots')
+      .select('label, start_time, end_time')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+    if (slotsError) {
+      console.error('Could not load configured time slots:', slotsError.code ?? 'unknown');
+      return jsonResponse({
+        error: schemaError(slotsError)
+          ? 'Booking backend is out of date. Apply the Supabase migrations and redeploy the booking function.'
+          : 'Could not verify the selected time slot',
+      }, 503);
+    }
+    const configuredSlot = (configuredSlots ?? []).find((item) => item.label === slot);
+    if (!configuredSlot) {
+      return jsonResponse({ error: 'This time slot is not available for booking' }, 400);
+    }
+    const slotStartsAt = new Date(`${dateISO}T${configuredSlot.start_time}+05:30`);
+    if (Number.isNaN(slotStartsAt.getTime())) {
+      console.error('Configured slot has an invalid start time');
+      return jsonResponse({ error: 'Could not verify the selected time slot' }, 503);
+    }
+    if (slotStartsAt.getTime() <= Date.now()) {
+      return jsonResponse({ error: 'This time slot has already started' }, 400);
+    }
+
+    const { data: equipment, error: equipmentError } = await admin
       .from('equipment')
-      .select('name, price, status')
-      .eq('id', equipment_id)
-      .single();
-
-    if (equipErr || !equip) {
-      return new Response(JSON.stringify({ error: 'Equipment not found' }), { status: 400 });
+      .select('*')
+      .eq('id', equipmentId)
+      .maybeSingle();
+    if (equipmentError || !equipment) {
+      return jsonResponse({ error: 'Equipment is unavailable' }, 404);
+    }
+    if (String(equipment.status ?? '').toLowerCase() !== 'available') {
+      return jsonResponse({ error: 'Equipment is unavailable' }, 409);
+    }
+    const price = Number(equipment.price_per_hour ?? equipment.price);
+    if (!Number.isFinite(price) || price < 0) {
+      console.error('Equipment has an invalid configured price');
+      return jsonResponse({ error: 'Equipment price could not be verified' }, 503);
     }
 
-    if (equip.status === 'Maintenance') {
-      return new Response(JSON.stringify({ error: 'Equipment is under maintenance' }), { status: 400 });
-    }
-
-    // ── Prevent double-booking ────────────────────────────────────────────
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: availabilityError } = await admin
       .from('bookings')
       .select('id')
-      .eq('equipment_id', equipment_id)
-      .eq('date_iso', date_iso)
+      .eq('equipment_id', equipmentId)
+      .eq('booking_date', dateISO)
       .eq('slot', slot)
-      .eq('status', 'Confirmed')
+      .in('booking_status', ['Confirmed', 'Pending Verification', 'confirmed', 'pending_verification', 'pending_payment'])
       .maybeSingle();
-
-    if (existing) {
-      return new Response(JSON.stringify({ error: 'This slot is already booked' }), { status: 409 });
+    if (availabilityError) {
+      console.error('Could not check booking availability:', availabilityError.code ?? 'unknown');
+      return jsonResponse({
+        error: schemaError(availabilityError)
+          ? 'Booking backend is out of date. Apply the Supabase migrations and redeploy the booking function.'
+          : 'Could not check slot availability',
+      }, 503);
     }
+    if (existing) return jsonResponse({ error: 'This slot is already booked' }, 409);
 
-    // ── Create booking ────────────────────────────────────────────────────
-    const bookingId = crypto.randomUUID();
+    const bookingAccessToken = randomHexToken();
+    const bookingReference = `#GH${randomNumber(10000000, 100000000)}`;
     const booking = {
-      id: bookingId,
-      equipment_id,
-      equipment_name: equip.name,
-      date: new Date(date_iso).toDateString(),
-      date_iso,
-      time: slot,
+      id: crypto.randomUUID(),
+      booking_reference: bookingReference,
+      equipment_id: equipment.id,
+      equipment_name: equipment.name,
+      booking_date: dateISO,
+      start_time: configuredSlot.start_time,
+      end_time: configuredSlot.end_time,
       slot,
-      price: equip.price,
+      time_range: slot,
+      total_amount: price,
       duration: '1 Hour',
-      status: 'Confirmed',
+      booking_status: paymentMethod === 'UPI' ? 'Pending Verification' : 'Confirmed',
       payment_status: 'Pending',
-      payment_method,
-      utr: null,
-      submitted_at: new Date().toISOString(),
-      student_name: student_name ?? user.email,
-      room_no: room_no ?? '',
-      pin: pin ?? '',
+      payment_method: paymentMethod,
+      utr: paymentMethod === 'UPI' ? utrLast4 : null,
+      created_at: new Date().toISOString(),
+      student_name: studentName || 'Student',
+      room_no: roomNo,
+      pin: String(randomNumber(1000, 10000)),
       proof: null,
+      booking_access_token_hash: await sha256Hex(bookingAccessToken),
     };
 
-    const { data, error } = await supabaseAdmin.from('bookings').insert([booking]).select().single();
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message }), { status: 400 });
+    const { error: insertError } = await admin.from('bookings').insert(booking);
+    if (insertError) {
+      if (insertError.code === '23505') return jsonResponse({ error: 'This slot is already booked' }, 409);
+      console.error('Could not create booking:', insertError.code ?? 'unknown');
+      return jsonResponse({
+        error: schemaError(insertError)
+          ? 'Booking backend is out of date. Apply the Supabase migrations and redeploy the booking function.'
+          : 'Could not save the reservation',
+      }, 503);
     }
 
-    // ── Audit log ─────────────────────────────────────────────────────────
-    await supabaseAdmin.from('audit_logs').insert({
-      admin_id: null,
-      action: 'create_booking',
-      target_table: 'bookings',
-      target_id: bookingId,
-      details: { equipment_id, date_iso, slot, payment_method },
-    });
-
-    return new Response(JSON.stringify({ booking: data }), {
-      status: 201,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message ?? 'Internal error' }), { status: 500 });
+    const safeBooking = { ...booking };
+    delete safeBooking.booking_access_token_hash;
+    return jsonResponse({ booking: safeBooking, booking_access_token: bookingAccessToken }, 201);
+  } catch (error) {
+    console.error('Booking request failed:', error instanceof Error ? error.message : 'Unknown error');
+    return jsonResponse({ error: 'Could not process the reservation' }, 500);
   }
 });

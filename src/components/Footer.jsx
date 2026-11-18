@@ -1,5 +1,5 @@
 import React from 'react';
-import { Gamepad2, Phone, Clock } from 'lucide-react';
+import { Phone, Clock } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export const Footer = () => {
@@ -11,12 +11,7 @@ export const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">
           {/* Brand info */}
           <div className="space-y-3.5">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg glass-pill flex items-center justify-center shadow-lime-sm">
-                <Gamepad2 className="w-4 h-4 text-[#C6FF00]" />
-              </div>
-              <span className="font-extrabold text-[#F5F7F2] tracking-tight text-sm">Hostel Gaming Hub</span>
-            </div>
+            <img src="/images/hostel-gaming-hub-logo.svg" alt="Hostel Gaming Hub" className="w-[150px] h-auto" />
             <p className="text-xs text-[#9EA79C] leading-relaxed">
               Tournament-grade ASUS TUF gaming laptops and EvoFox Hyperconnect™ wireless controllers reserved exclusively for hostel residents.
             </p>

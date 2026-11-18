@@ -34,7 +34,7 @@ export const HomePage = () => {
       code: 'TUF_RYZEN7_7435HS',
       price: '₹50',
       period: '/hr',
-      image: '/images/laptop-hero.jpg',
+      image: '/images/laptop-inspect-neon.png',
       badge: 'AMD RYZEN 7 7435HS • RTX 3050 4GB',
       specs: [
         { label: 'Display', value: '144Hz Full HD IPS' },
@@ -53,19 +53,19 @@ export const HomePage = () => {
     controller: {
       id: 'eq-controller-01',
       title: 'EVOFOX ELITE OPS WIRELESS',
-      subtitle: 'Hyperconnect™ 2.4GHz Zero-Lag Wireless Gamepad',
+      subtitle: 'EvoFox Elite Ops Wireless Gamepad • Hyperconnect™ 2.4GHz',
       code: 'EVOFOX_HYPERCONNECT',
       price: '₹20',
       period: '/hr',
-      image: '/images/controller-hero.jpg',
-      badge: '2.4GHz Hyperconnect Wireless',
+      image: '/images/controller-inspect-neon.png',
+      badge: 'EVOFOX ELITE OPS • 2.4GHz HYPERCONNECT',
       specs: [
-        { label: 'Wireless Link', value: 'Hyperconnect™ 2.4GHz USB' },
-        { label: 'Haptics', value: 'Dual Rumble Vibration Motors' },
-        { label: 'Joysticks', value: '360° Precision Analog Sticks' },
-        { label: 'Battery', value: '8+ Hours Playtime' },
-        { label: 'Charging', value: 'Type-C Fast Charge' },
-        { label: 'Ergonomics', value: 'Textured Rubber Grip Shell' },
+        { label: 'Gamepad', value: 'EvoFox Elite Ops Wireless' },
+        { label: 'Connection', value: 'Hyperconnect™ 2.4GHz Dongle' },
+        { label: 'Haptics', value: 'Dual Rumble Motors' },
+        { label: 'Grip', value: 'Textured Handles' },
+        { label: 'Combo Match', value: '2x same gamepads in Combo' },
+        { label: 'Standalone Rate', value: '₹20 per hour' },
       ],
       nodes: [
         { title: 'Hyperconnect™ 2.4GHz', desc: 'Ultra-low latency wireless dongle', top: '22%', left: '10%' },
@@ -80,7 +80,7 @@ export const HomePage = () => {
       code: 'TUF_DUAL_COMBO',
       price: '₹80',
       period: '/hr',
-      image: '/images/combo-setup.jpg',
+      image: '/images/combo-inspect-battle-station.png',
       badge: 'TUF LAPTOP + 2x EVOFOX GAMEPADS',
       specs: [
         { label: 'Laptop Rig', value: 'ASUS TUF Ryzen 7 7435HS • RTX 3050 4GB' },
@@ -137,7 +137,15 @@ export const HomePage = () => {
       {/* ========================================================================= */}
       {/* 1. HERO SECTION: Cyber-Tech Editorial + 3D Stone Pedestal Hardware Stage  */}
       {/* ========================================================================= */}
-      <section className="relative pt-8 pb-16 sm:pt-14 sm:pb-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="hero-cinematic">
+        <img
+          src="/images/hero-neon-hardware.png"
+          alt="ASUS TUF laptop and EvoFox gamepads on neon-lit volcanic stone"
+          className="hero-cinematic-art"
+          fetchPriority="high"
+        />
+        <div className="hero-cinematic-shade" aria-hidden="true" />
+        <div className="hero-cinematic-content relative pt-8 pb-5 sm:pt-14 sm:pb-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Top Telemetry Breadcrumb Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 pb-6 mb-8 border-b border-white/[0.08] text-[11px] font-mono text-[#9EA79C]">
@@ -146,8 +154,6 @@ export const HomePage = () => {
               <span className="w-1.5 h-1.5 rounded-full bg-[#C6FF00] animate-pulse" />
               <span>LIVE SYSTEM: OPERATIONAL</span>
             </span>
-            <span className="hidden sm:inline text-white/[0.2]">|</span>
-            <span className="hidden sm:inline">LOC: BLOCK-B // GROUND FLOOR LOUNGE</span>
           </div>
 
           <div className="flex items-center gap-3 font-semibold">
@@ -159,12 +165,11 @@ export const HomePage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
           
           {/* Left Editorial Text Column */}
-          <div className="lg:col-span-5 space-y-7 text-center lg:text-left z-10">
+          <div className="lg:col-span-5 space-y-8 sm:space-y-9 text-center lg:text-left z-10">
             
             {/* Category Sub-Heading */}
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass-pill text-xs font-mono font-bold text-[#C6FF00]">
               <Crosshair className="w-3.5 h-3.5" />
-              <span>TOURNAMENT PROTOCOL 2026</span>
             </div>
 
             {/* Giant High-Impact Cyber Editorial Title */}
@@ -176,14 +181,8 @@ export const HomePage = () => {
               IN YOUR HOSTEL
             </h1>
 
-            {/* Editorial Description */}
-            <p className="text-sm sm:text-base text-[#9EA79C] max-w-lg mx-auto lg:mx-0 font-normal leading-relaxed">
-              Reserve tournament-tuned ASUS TUF Gaming Laptops (AMD Ryzen 7 7435HS & RTX 3050 4GB, 16GB RAM / 512GB SSD) and EvoFox Elite Ops Hyperconnect™ wireless gamepads. 
-              Resting on our signature basalt rock docks with zero-lag input response and instant session activation.
-            </p>
-
             {/* Action Row: Primary Button + Circular Arrow Button matching reference photo */}
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2">
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-3">
               <button
                 onClick={() => setCurrentPage('equipment')}
                 className="inline-flex items-center justify-center gap-3 px-8 py-4 rounded-full bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-black text-xs sm:text-sm tracking-wider uppercase shadow-lime-glow transition-all duration-300 hover:scale-[1.02] active:scale-95"
@@ -210,35 +209,25 @@ export const HomePage = () => {
               </div>
             </div>
 
-            {/* Micro Feature Telemetry Indicators */}
-            <div className="pt-4 flex items-center justify-center lg:justify-start gap-6 text-xs font-mono text-[#9EA79C] border-t border-white/[0.06]">
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#C6FF00]" />
-                <span>144+ FPS AAA READY</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#C6FF00]" />
-                <span>0MS INPUT LAG</span>
-              </div>
-            </div>
 
           </div>
 
           {/* Right Column: 3D Stone Pedestal Hardware Stage Component */}
           <div className="lg:col-span-7 relative flex items-center justify-center">
-            <StoneProductStage onBook={() => handleBookGear('combo')} />
+            <StoneProductStage useHeroBackground onBook={() => handleBookGear('combo')} />
           </div>
 
+        </div>
         </div>
       </section>
 
       {/* ========================================================================= */}
       {/* 2. NEO-BRUTALIST BENTO GRID (DIRECT MATCH TO REFERENCE IMAGE 01, 02, 03)  */}
       {/* ========================================================================= */}
-      <section id="bento-grid" className="py-20 relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section id="bento-grid" className="pt-4 sm:pt-6 pb-12 sm:pb-16 relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Section Header */}
-        <div className="max-w-2xl mb-12">
+        <div className="max-w-2xl mb-8 sm:mb-10">
           <div className="text-xs font-mono font-bold uppercase tracking-widest text-[#C6FF00] mb-2 flex items-center gap-2">
             <span className="w-5 h-[2px] bg-[#C6FF00]" />
             <span>// ARCHITECTURE & RIG PERFORMANCE</span>
@@ -335,7 +324,7 @@ export const HomePage = () => {
       {/* ========================================================================= */}
       {/* 3. INTERACTIVE HARDWARE SHOWCASE ("Больше возможностей" style section)    */}
       {/* ========================================================================= */}
-      <section className="py-20 bg-gradient-to-b from-[#0D100D]/60 via-[#0A0D0A]/80 to-[#080A08]/90 border-y border-white/[0.08] relative backdrop-blur-xl">
+      <section className="py-12 sm:py-16 bg-gradient-to-b from-[#0D100D]/60 via-[#0A0D0A]/80 to-[#080A08]/90 border-y border-white/[0.08] relative backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
@@ -395,14 +384,14 @@ export const HomePage = () => {
                 <img 
                   src={currentGear.image} 
                   alt={currentGear.title}
-                  className="w-full h-full object-cover object-center filter brightness-95 contrast-105 group-hover:scale-105 transition-transform duration-700" 
+                  className="w-full h-full object-contain filter brightness-95 contrast-105 group-hover:scale-[1.02] transition-transform duration-700"
                 />
                 
                 {/* Radial lime halo overlay */}
                 <div className="absolute inset-0 bg-radial from-[#C6FF00]/12 via-transparent to-black/50 pointer-events-none" />
 
                 {/* Floating Interactive Feature Nodes */}
-                {currentGear.nodes.map((node, i) => (
+                {activeGearTab !== 'combo' && currentGear.nodes.map((node, i) => (
                   <div 
                     key={i}
                     style={{ top: node.top, left: node.left, right: node.right }}
@@ -469,7 +458,7 @@ export const HomePage = () => {
       {/* ========================================================================= */}
       {/* 4. STEP-BY-STEP RESERVATION TIMELINE ("Как подключить" style section)   */}
       {/* ========================================================================= */}
-      <section className="py-20 relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="py-12 sm:py-16 relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           

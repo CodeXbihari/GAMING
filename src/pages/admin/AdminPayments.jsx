@@ -140,7 +140,7 @@ export const AdminPayments = () => {
 
                     {item.utr && (
                       <div className="text-xs text-[#9EA79C]">
-                        UTR / REF: <span className="font-mono font-bold text-[#C6FF00]">{item.utr}</span>
+                        UPI REF (LAST 4): <span className="font-mono font-bold text-[#C6FF00]">{item.utr}</span>
                       </div>
                     )}
 
@@ -259,7 +259,7 @@ export const AdminPayments = () => {
               </div>
               {previewReceipt.utr && (
                 <div className="flex justify-between text-gray-600 text-xs">
-                  <span>UTR / Ref:</span>
+                  <span>UPI ref (last 4):</span>
                   <span className="font-mono font-black text-gray-900">{previewReceipt.utr}</span>
                 </div>
               )}

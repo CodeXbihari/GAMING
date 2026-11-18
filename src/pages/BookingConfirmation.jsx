@@ -1,22 +1,20 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { supabase } from '../lib/supabase';
 import { Check, Calendar, Clock, Copy, ShieldCheck, KeyRound, Crosshair, Terminal, Download } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export const BookingConfirmation = () => {
   const { latestBooking, bookings, setCurrentPage, addToast } = useApp();
+  const [wantsGame, setWantsGame] = useState('');
+  const [gameName, setGameName] = useState('');
+  const [gameRequestSubmitted, setGameRequestSubmitted] = useState(false);
+  const [gameRequestSubmitting, setGameRequestSubmitting] = useState(false);
 
-  const booking = latestBooking || bookings[0] || {
-    id: '#GH250415007',
-    equipmentName: 'ASUS TUF Gaming Laptop',
-    equipmentId: 'laptop',
-    date: 'Sat, 15 Nov 2026',
-    time: '11:00 AM - 12:00 PM',
-    price: 50,
-    pickup_pin: '4829',
-  };
+  const booking = latestBooking || bookings[0] || null;
 
   useEffect(() => {
+    if (!booking) return;
     try {
       confetti({
         particleCount: 75,
@@ -25,7 +23,7 @@ export const BookingConfirmation = () => {
         colors: ['#C6FF00', '#D4FF33', '#111512']
       });
     } catch (e) {}
-  }, []);
+  }, [Boolean(booking)]);
 
   const handleCopyRef = () => {
     navigator.clipboard?.writeText(booking.id);
@@ -37,6 +35,75 @@ export const BookingConfirmation = () => {
     if (booking.equipmentId === 'controller') return '/images/controller-hero.jpg';
     if (booking.equipmentId === 'combo') return '/images/combo-setup.jpg';
     return '/images/laptop-hero.jpg';
+  };
+
+  if (!booking) {
+    return (
+      <main className="relative min-h-[calc(100vh-80px)] px-4 py-20 flex items-center justify-center">
+        <div className="glass-panel max-w-lg w-full rounded-3xl p-8 text-center">
+          <h1 className="text-2xl font-black text-[#F5F7F2]">NO ACTIVE RESERVATION</h1>
+          <p className="mt-3 text-sm text-[#9EA79C]">
+            This browser session has no saved booking confirmation. You can browse equipment and make a reservation.
+          </p>
+          <button
+            onClick={() => setCurrentPage('equipment')}
+            className="mt-6 rounded-full bg-[#C6FF00] px-6 py-3 text-xs font-mono font-black text-[#080A08]"
+          >
+            BROWSE EQUIPMENT
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  const handleGameRequestSubmit = async (event) => {
+    event.preventDefault();
+    if (!wantsGame) {
+      addToast('Choose Yes or No to continue.', 'warning');
+      return;
+    }
+    if (!booking.bookingAccessToken) {
+      addToast('This reservation has no active request key. Contact the admin to add a game request.', 'error');
+      return;
+    }
+    if (wantsGame === 'yes' && !gameName.trim()) {
+      addToast('Enter the game name you want downloaded.', 'warning');
+      return;
+    }
+
+    setGameRequestSubmitting(true);
+    let data;
+    let error;
+    try {
+      ({ data, error } = await supabase.functions.invoke('game_download_request', {
+        body: {
+          booking_reference: booking.id,
+          booking_access_token: booking.bookingAccessToken,
+          wants_download: wantsGame === 'yes',
+          game_name: wantsGame === 'yes' ? gameName.trim() : null
+        }
+      }));
+    } catch (requestError) {
+      error = requestError;
+    } finally {
+      setGameRequestSubmitting(false);
+    }
+
+    if (error || !data?.saved) {
+      console.error('Game download request error:', error || data?.error);
+      addToast(data?.error || 'Could not save the game download request. Please try again.', 'error');
+      return;
+    }
+
+    setGameRequestSubmitted(true);
+    const savedWantsGame = Boolean(data.wants_download);
+    setWantsGame(savedWantsGame ? 'yes' : 'no');
+    setGameName(data.game_name || '');
+    if (savedWantsGame && !data.notification_sent) {
+      addToast('Request saved with your reservation, but the admin email notification could not be sent.', 'warning');
+      return;
+    }
+    addToast(savedWantsGame ? 'Game request saved and admin notified.' : 'Preference saved with your reservation.', 'success');
   };
 
   return (
@@ -118,7 +185,7 @@ export const BookingConfirmation = () => {
         <div className="p-4 rounded-2xl glass-pill border border-white/[0.08] flex items-center gap-3.5">
           <ShieldCheck className="w-5 h-5 text-[#C6FF00] shrink-0" />
           <div className="text-[11px] font-mono text-[#9EA79C] leading-relaxed">
-            Your gaming rig is reserved. Head to <span className="text-[#C6FF00] font-bold">Ground Floor Block B Lounge</span> at your scheduled time.
+            Your gaming rig is reserved. Head to <span className="text-[#C6FF00] font-bold">ROOM 207</span> at your scheduled time.
           </div>
         </div>
 
@@ -132,6 +199,80 @@ export const BookingConfirmation = () => {
           <span className="text-[8px] font-mono text-[#687366] tracking-widest uppercase">AUTH_CODE: HGH-HOSTEL-CRYPT-2026</span>
         </div>
       </div>
+
+      {/* Optional game download request */}
+      <form
+        onSubmit={handleGameRequestSubmit}
+        className="w-full max-w-md glass-panel rounded-3xl p-5 sm:p-6 mb-8 text-left space-y-4"
+      >
+        <div>
+          <div className="flex items-center gap-2 text-[10px] font-mono font-bold tracking-widest text-[#C6FF00]">
+            <Download className="w-3.5 h-3.5" />
+            GAME DOWNLOAD REQUEST
+          </div>
+          <h2 className="mt-2 text-base font-black text-[#F5F7F2]">Would you like a game downloaded?</h2>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3" role="group" aria-label="Would you like a game downloaded?">
+          {[
+            { value: 'yes', label: 'Yes, please' },
+            { value: 'no', label: 'No, thanks' }
+          ].map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              disabled={gameRequestSubmitted}
+              aria-pressed={wantsGame === option.value}
+              onClick={() => {
+                setWantsGame(option.value);
+                setGameRequestSubmitted(false);
+                if (option.value === 'no') setGameName('');
+              }}
+              className={`rounded-xl border px-4 py-3 text-xs font-mono font-bold transition-colors ${
+                wantsGame === option.value
+                  ? 'border-[#C6FF00] bg-[#C6FF00]/10 text-[#C6FF00]'
+                  : 'border-white/10 bg-[#080A08]/60 text-[#9EA79C] hover:border-[#C6FF00]/50'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        {wantsGame === 'yes' && (
+          <label className="block space-y-2">
+            <span className="text-[10px] font-mono font-bold tracking-wider text-[#9EA79C]">GAME NAME</span>
+            <input
+              type="text"
+              value={gameName}
+              onChange={(event) => {
+                setGameName(event.target.value);
+                setGameRequestSubmitted(false);
+              }}
+              required
+              disabled={gameRequestSubmitted}
+              maxLength={100}
+              placeholder="Enter the game you want"
+              className="w-full rounded-xl border border-white/10 bg-[#080A08] px-4 py-3 text-sm text-[#F5F7F2] outline-none placeholder:text-[#687366] focus:border-[#C6FF00]"
+            />
+          </label>
+        )}
+
+        {gameRequestSubmitted ? (
+          <p className="text-xs font-mono text-[#C6FF00]" role="status">
+            {wantsGame === 'yes' ? `Request saved for ${gameName.trim()}.` : 'No game download requested; preference saved.'}
+          </p>
+        ) : (
+          <button
+            type="submit"
+            disabled={gameRequestSubmitting}
+            className="w-full rounded-full border border-[#C6FF00]/50 px-4 py-3 text-xs font-mono font-bold text-[#C6FF00] transition-colors hover:bg-[#C6FF00]/10"
+          >
+            {gameRequestSubmitting ? 'SAVING REQUEST…' : 'SAVE PREFERENCE'}
+          </button>
+        )}
+        <p className="text-[10px] font-mono text-[#687366]">Your preference is saved with this reservation.</p>
+      </form>
 
       {/* Action Buttons */}
       <div className="flex flex-row items-center justify-center gap-4 w-full max-w-sm">

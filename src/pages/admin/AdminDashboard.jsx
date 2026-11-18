@@ -6,7 +6,6 @@ import {
   Clock,
   Laptop,
   TrendingUp,
-  ChevronDown,
   Check,
   ArrowRight,
   Crosshair,
@@ -18,18 +17,26 @@ export const AdminDashboard = () => {
   const { bookings, equipmentList, setAdminSubPage } = useApp();
   const [timeFilter, setTimeFilter] = useState('LAST 30 DAYS');
 
-  const totalBookingsCount = bookings.length;
-  const totalRevenue = bookings
+  const filterDays = timeFilter === 'LAST 7 DAYS' ? 7 : timeFilter === 'LAST 30 DAYS' ? 30 : null;
+  const cutoff = filterDays ? new Date(Date.now() - filterDays * 24 * 60 * 60 * 1000) : null;
+  const visibleBookings = bookings.filter((booking) => {
+    if (!cutoff) return true;
+    const date = booking.dateISO ? new Date(`${booking.dateISO}T00:00:00`) : null;
+    return !date || (date >= cutoff && date <= new Date());
+  });
+
+  const totalBookingsCount = visibleBookings.length;
+  const totalRevenue = visibleBookings
     .filter((b) => b.paymentStatus === 'Paid')
     .reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
-  const pendingPaymentsCount = bookings.filter(
+  const pendingPaymentsCount = visibleBookings.filter(
     (b) => b.paymentStatus === 'Pending' || b.status === 'Pending Verification'
   ).length;
   const availableEquipmentCount = equipmentList.filter(
     (e) => e.status === 'Available'
   ).length;
 
-  const recentBookings = bookings.slice(0, 4);
+  const recentBookings = visibleBookings.slice(0, 4);
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto font-mono">
@@ -47,10 +54,17 @@ export const AdminDashboard = () => {
 
         {/* Date Filter Dropdown */}
         <div className="relative">
-          <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#111512] border border-white/[0.1] text-xs font-bold text-[#F5F7F2] transition-colors hover:border-[#C6FF00]/50">
-            <span>{timeFilter}</span>
-            <ChevronDown className="w-3.5 h-3.5 text-[#C6FF00]" />
-          </button>
+          <label className="sr-only" htmlFor="dashboard-time-filter">Dashboard date range</label>
+          <select
+            id="dashboard-time-filter"
+            value={timeFilter}
+            onChange={(event) => setTimeFilter(event.target.value)}
+            className="px-4 py-2 rounded-xl bg-[#111512] border border-white/[0.1] text-xs font-bold text-[#F5F7F2] transition-colors hover:border-[#C6FF00]/50"
+          >
+            <option>LAST 7 DAYS</option>
+            <option>LAST 30 DAYS</option>
+            <option>ALL TIME</option>
+          </select>
         </div>
       </div>
 
