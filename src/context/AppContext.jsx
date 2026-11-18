@@ -203,10 +203,12 @@ export const AppProvider = ({ children }) => {
   // User Profile
   const [user, setUser] = useState(() => {
     try {
-      const savedProfile = localStorage.getItem('hostel_student_profile');
-      if (savedProfile) return JSON.parse(savedProfile);
+      const savedProfile = JSON.parse(localStorage.getItem('hostel_student_profile') || 'null');
+      if (savedProfile?.name?.trim() && savedProfile?.room?.trim() && savedProfile?.phone?.trim()
+        && savedProfile.name !== 'Shashank R.' && savedProfile.name !== 'Punit'
+        && savedProfile.phone !== '+91 98765 43210') return savedProfile;
     } catch {}
-    return { id: 'guest-student-001', name: 'Shashank R.', initial: 'S', room: 'Room 304, Block B', hostel: 'Block B', phone: '+91 98765 43210', role: 'student' };
+    return { name: '', initial: '', room: '', phone: '', role: 'student' };
   });
   const [profileModalOpen, setProfileModalOpen] = useState(false);
 

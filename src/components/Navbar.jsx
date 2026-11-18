@@ -1,10 +1,24 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { User, ShieldCheck, Menu, X, ArrowUpRight } from 'lucide-react';
 
 export const Navbar = () => {
   const { currentPage, setCurrentPage, user, setUser, profileModalOpen, setProfileModalOpen } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({ name: '', room: '', phone: '' });
+  const profileButtonRef = useRef(null);
+  const closeProfile = () => {
+    setProfileModalOpen(false);
+    profileButtonRef.current?.focus();
+  };
+
+  useEffect(() => {
+    if (!profileModalOpen) return;
+    setProfileDraft({ name: user?.name || '', room: user?.room || '', phone: user?.phone || '' });
+    const onKeyDown = (event) => { if (event.key === 'Escape') closeProfile(); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [profileModalOpen]);
 
   const isHome = currentPage === 'home';
 
@@ -66,11 +80,14 @@ export const Navbar = () => {
           <div className="flex items-center gap-3">
             {/* Profile Avatar circle with Initial */}
             <button
-              onClick={() => setCurrentPage('bookings')}
+              ref={profileButtonRef}
+              onClick={() => setProfileModalOpen(true)}
+              aria-label={user?.name ? `Student profile for ${user.name}` : 'Open student profile'}
+              aria-haspopup="dialog"
               className="w-8 h-8 rounded-full glass-pill flex items-center justify-center text-xs font-bold text-[#F5F7F2] hover:border-[#C6FF00] hover:text-[#C6FF00] hover:shadow-lime-sm transition-all"
               title="Student Profile"
             >
-              {user.initial || 'S'}
+              {user?.name?.trim()?.[0]?.toUpperCase() || <User className="w-4 h-4" />}
             </button>
 
             {/* Lime Arrow CTA button on homepage matching reference image */}
@@ -128,16 +145,17 @@ export const Navbar = () => {
 
       {/* Login / Profile Modal */}
       {profileModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="glass-modal rounded-3xl p-6 max-w-xs w-full relative text-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in" onMouseDown={(event) => { if (event.target === event.currentTarget) closeProfile(); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="student-profile-title" className="glass-modal rounded-3xl p-6 max-w-xs w-full relative text-xs" onMouseDown={(event) => event.stopPropagation()}>
             <button 
-              onClick={() => setProfileModalOpen(false)}
+              onClick={closeProfile}
+              aria-label="Close student profile"
               className="absolute top-4 right-4 text-[#9EA79C] hover:text-[#F5F7F2]"
             >
               <X className="w-4 h-4" />
             </button>
 
-            <h3 className="text-base font-bold text-[#F5F7F2] mb-1">Student Profile</h3>
+            <h3 id="student-profile-title" className="text-base font-bold text-[#F5F7F2] mb-1">Student Profile</h3>
             <p className="text-[11px] text-[#9EA79C] mb-4">Set your hostel details for instant desk identification.</p>
 
             <div className="space-y-3.5">
@@ -145,8 +163,10 @@ export const Navbar = () => {
                 <label className="block text-[#9EA79C] mb-1 font-semibold uppercase tracking-wider text-[10px]">Student Name</label>
                 <input
                   type="text"
-                  value={user.name}
-                  onChange={(e) => setUser({ ...user, name: e.target.value, initial: e.target.value.charAt(0).toUpperCase() })}
+                  value={profileDraft.name}
+                  placeholder="Enter your full name"
+                  onChange={(e) => setProfileDraft({ ...profileDraft, name: e.target.value })}
+                  autoComplete="name"
                   className="w-full glass-input rounded-xl px-3.5 py-2 text-[#F5F7F2] focus:outline-none"
                 />
               </div>
@@ -155,8 +175,9 @@ export const Navbar = () => {
                 <label className="block text-[#9EA79C] mb-1 font-semibold uppercase tracking-wider text-[10px]">Room Number</label>
                 <input
                   type="text"
-                  value={user.room}
-                  onChange={(e) => setUser({ ...user, room: e.target.value })}
+                  value={profileDraft.room}
+                  placeholder="Enter your room number and block"
+                  onChange={(e) => setProfileDraft({ ...profileDraft, room: e.target.value })}
                   className="w-full glass-input rounded-xl px-3.5 py-2 text-[#F5F7F2] focus:outline-none"
                 />
               </div>
@@ -167,19 +188,27 @@ export const Navbar = () => {
                   type="tel"
                   inputMode="tel"
                   autoComplete="tel"
-                  value={user.phone || ''}
-                  onChange={(e) => setUser({ ...user, phone: e.target.value })}
+                  value={profileDraft.phone}
+                  placeholder="Enter your mobile number"
+                  onChange={(e) => setProfileDraft({ ...profileDraft, phone: e.target.value })}
                   className="w-full glass-input rounded-xl px-3.5 py-2 text-[#F5F7F2] focus:outline-none"
-                  placeholder="Enter mobile number"
                 />
               </div>
 
               <button
-                onClick={() => setProfileModalOpen(false)}
+                onClick={() => {
+                  const cleanName = profileDraft.name.trim();
+                  const cleanRoom = profileDraft.room.trim();
+                  const cleanPhone = profileDraft.phone.trim();
+                  if (!cleanName || !cleanRoom || cleanName.length > 120 || cleanRoom.length > 40 || !/^\+?[\d\s()-]{7,20}$/.test(cleanPhone)) return;
+                  setUser({ name: cleanName, room: cleanRoom, phone: cleanPhone, initial: cleanName[0]?.toUpperCase() || '', role: 'student' });
+                  closeProfile();
+                }}
                 className="w-full mt-2 py-2.5 rounded-xl bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-extrabold tracking-wide shadow-lime-glow transition-all"
               >
                 Save & Close
               </button>
+              <button type="button" onClick={() => { setUser({ name: '', room: '', phone: '', initial: '', role: 'student' }); setProfileDraft({ name: '', room: '', phone: '' }); }} className="w-full py-2 text-[#9EA79C] hover:text-[#F5F7F2]">Clear saved profile</button>
             </div>
           </div>
         </div>
