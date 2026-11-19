@@ -48,7 +48,18 @@ Deno.serve(async (req) => {
       .eq('id', user.id)
       .maybeSingle();
     if (profileError) return respond({ error: 'Could not verify account permissions' }, 503);
-    if (!profile || !['admin', 'student'].includes(profile.role)) {
+    const isAdmin = profile?.role === 'admin';
+    let isStudent = false;
+    if (!isAdmin) {
+      const { data: studentProfile, error: studentProfileError } = await admin
+        .from('student_booking_profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (studentProfileError) return respond({ error: 'Could not verify account permissions' }, 503);
+      isStudent = Boolean(studentProfile);
+    }
+    if (!isAdmin && !isStudent) {
       return respond({ error: 'Account is not allowed to cancel bookings' }, 403);
     }
 
@@ -61,7 +72,6 @@ Deno.serve(async (req) => {
     if (bookingError) return respond({ error: 'Could not load the reservation' }, 503);
     if (!booking) return respond({ error: 'Booking not found' }, 404);
 
-    const isAdmin = profile.role === 'admin';
     if (!isAdmin && booking.student_id !== user.id) {
       return respond({ error: 'You can only cancel your own reservation' }, 403);
     }

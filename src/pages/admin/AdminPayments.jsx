@@ -10,7 +10,7 @@ export const AdminPayments = () => {
   const [previewReceipt, setPreviewReceipt] = useState(null);
   const [proofUrl, setProofUrl] = useState(null);
 
-  const pendingPayments = bookings.filter((b) => b.paymentStatus === 'Pending' || b.status === 'Pending Verification');
+  const pendingPayments = bookings.filter((b) => b.paymentStatus === 'Pending' && ['Confirmed', 'Pending Verification'].includes(b.status));
   const verifiedPayments = bookings.filter((b) => b.paymentStatus === 'Paid');
   const rejectedPayments = bookings.filter((b) => b.paymentStatus === 'Rejected');
 

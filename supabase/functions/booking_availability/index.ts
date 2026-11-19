@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     const body = JSON.parse(rawBody);
     const equipmentId = typeof body?.equipment_id === 'string' ? body.equipment_id.trim() : '';
     const dateISO = typeof body?.date_iso === 'string' ? body.date_iso.trim() : '';
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(equipmentId)) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(equipmentId)) {
       return respond({ error: 'Choose valid equipment' }, 400);
     }
     const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(dateISO)
@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
       );
     })).map((slot) => slot.label);
 
-    return respond({ unavailable_slots: unavailableSlots });
+    return respond({ unavailable_slots: unavailableSlots, slots: slots ?? [] });
   } catch (error) {
     console.error('Availability request failed:', error instanceof Error ? error.name : 'Unknown error');
     return respond({ error: 'Could not load booking availability' }, 500);

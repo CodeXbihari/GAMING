@@ -2,7 +2,7 @@ import React from 'react';
 
 export const StoneProductStage = ({ onBook, useHeroBackground = false }) => (
   <div className="relative w-full max-w-2xl mx-auto select-none">
-    <div className="relative aspect-[16/11] sm:aspect-[16/10] w-full">
+    <div className="stone-stage-visual relative aspect-[16/11] sm:aspect-[16/10] w-full">
       {!useHeroBackground && (
         <img
           src="/images/hero-neon-hardware.png"
@@ -12,7 +12,7 @@ export const StoneProductStage = ({ onBook, useHeroBackground = false }) => (
         />
       )}
     </div>
-    <div className="mt-3 flex justify-end px-2">
+    <div className="stone-stage-action mt-3 flex justify-end px-2">
       <button
         onClick={onBook}
         className="text-xs font-black text-[#C6FF00] hover:text-[#D4FF33] uppercase tracking-wider transition-colors flex items-center gap-1 underline underline-offset-4"

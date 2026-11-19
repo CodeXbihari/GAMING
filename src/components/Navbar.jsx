@@ -1,24 +1,165 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { clearStudentGuestProfile } from '../lib/studentGuestProfile';
 import { User, ShieldCheck, Menu, X, ArrowUpRight } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export const Navbar = () => {
-  const { currentPage, setCurrentPage, user, setUser, profileModalOpen, setProfileModalOpen } = useApp();
+  const { currentPage, setCurrentPage, user, setUser, authSession, profileModalOpen, setProfileModalOpen, addToast } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileErrors, setProfileErrors] = useState({});
   const [profileDraft, setProfileDraft] = useState({ name: '', room: '', phone: '' });
+  const [profileRequest, setProfileRequest] = useState('');
+  const [profileRequestError, setProfileRequestError] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const requestInProgress = useRef(false);
   const profileButtonRef = useRef(null);
   const closeProfile = () => {
+    if (requestInProgress.current) return;
     setProfileModalOpen(false);
     profileButtonRef.current?.focus();
   };
 
   useEffect(() => {
     if (!profileModalOpen) return;
+    setProfileErrors({});
+    setProfileRequestError('');
     setProfileDraft({ name: user?.name || '', room: user?.room || '', phone: user?.phone || '' });
     const onKeyDown = (event) => { if (event.key === 'Escape') closeProfile(); };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [profileModalOpen]);
+
+  const runProfileRequest = async (operation, request) => {
+    if (requestInProgress.current) return false;
+    requestInProgress.current = true;
+    setProfileRequest(operation);
+    setProfileRequestError('');
+    try {
+      await request();
+      return true;
+    } catch {
+      setProfileRequestError(operation === 'save'
+        ? 'Could not save your profile. Please try again.'
+        : 'Could not clear your profile. Please try again.');
+      return false;
+    } finally {
+      requestInProgress.current = false;
+      setProfileRequest('');
+    }
+  };
+
+  const normalizePhone = (value) => {
+    const trimmed = value.trim();
+    if (trimmed.startsWith('+')) return `+${trimmed.slice(1).replace(/\D/g, '')}`;
+    const digits = trimmed.replace(/\D/g, '');
+    return digits.length === 10 ? `+91${digits}` : `+${digits}`;
+  };
+
+  const saveVerifiedProfile = async (authUser, name, room) => {
+    if (!authUser?.id || !authUser.phone) throw new Error('Verify your mobile number first.');
+    const { error } = await supabase.from('student_booking_profiles').upsert({
+      id: authUser.id,
+      phone_number: authUser.phone,
+      full_name: name,
+      room_no: room
+    }, { onConflict: 'id' });
+    if (error) throw error;
+    setUser({ name, room, phone: authUser.phone, initial: name[0].toUpperCase(), role: 'student' });
+  };
+
+  const sendProfileOtp = async () => {
+    const phone = normalizePhone(profileDraft.phone);
+    if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
+      setProfileErrors({ ...profileErrors, phone: 'Enter a valid international mobile number.' });
+      return;
+    }
+    setProfileRequestError('');
+    setProfileRequest('otp');
+    const { error } = await supabase.auth.signInWithOtp({ phone });
+    setProfileRequest('');
+    if (error) {
+      setProfileRequestError('Could not send a code. Check the number and SMS setup, then try again.');
+      return;
+    }
+    setProfileDraft((draft) => ({ ...draft, phone }));
+    setOtpSent(true);
+    setProfileRequestError('Verification code sent by SMS.');
+  };
+
+  const verifyProfileOtp = async () => {
+    const phone = normalizePhone(profileDraft.phone);
+    if (!/^\d{6}$/.test(otpCode.trim())) {
+      setProfileRequestError('Enter the 6-digit code sent to your phone.');
+      return;
+    }
+    setProfileRequest('verify');
+    setProfileRequestError('');
+    const { data, error } = await supabase.auth.verifyOtp({ phone, token: otpCode.trim(), type: 'sms' });
+    if (error || !data.user) {
+      setProfileRequest('');
+      setProfileRequestError('That code could not be verified. Request a new code and try again.');
+      return;
+    }
+    const name = profileDraft.name.trim();
+    const room = profileDraft.room.trim();
+    if (!name || !room) {
+      setProfileRequest('');
+      setProfileRequestError('Enter your name and room, then save your profile.');
+      return;
+    }
+    try {
+      await saveVerifiedProfile(data.user, name, room);
+      setOtpSent(false);
+      setOtpCode('');
+      addToast('Mobile verified and student profile saved.', 'success');
+      setProfileModalOpen(false);
+    } catch {
+      setProfileRequestError('Your number is verified, but your profile could not be saved. Try Save again.');
+    } finally { setProfileRequest(''); }
+  };
+
+  const handleProfileSave = async (event) => {
+    event.preventDefault();
+    const name = profileDraft.name.trim();
+    const room = profileDraft.room.trim();
+    const phone = profileDraft.phone.trim();
+    const errors = {};
+    if (!name || Array.from(name).length > 120 || /[\x00-\x1F\x7F]/.test(name)) {
+      errors.name = 'Enter a name of 1–120 characters.';
+    }
+    if (!room || Array.from(room).length > 40 || /[\x00-\x1F\x7F]/.test(room)) {
+      errors.room = 'Enter a room number of 1–40 characters.';
+    }
+    if (phone.length > 40 || !/^\+?[\d ()-]+$/.test(phone)
+      || !/^\d{7,15}$/.test(phone.replace(/\D/g, ''))) {
+      errors.phone = 'Enter a mobile number with 7–15 digits.';
+    }
+    setProfileErrors(errors);
+    if (Object.keys(errors).length) return;
+    const normalizedPhone = normalizePhone(phone);
+    if (authSession?.user?.phone === normalizedPhone) {
+      if (!await runProfileRequest('save', () => saveVerifiedProfile(authSession.user, name, room))) return;
+      addToast('Student profile saved.', 'success');
+      closeProfile();
+      return;
+    }
+    await sendProfileOtp();
+  };
+
+  const handleProfileClear = async () => {
+    if (!await runProfileRequest('clear', async () => {
+      if (authSession?.user?.id) {
+        const { error } = await supabase.from('student_booking_profiles').delete().eq('id', authSession.user.id);
+        if (error) throw error;
+      }
+      await clearStudentGuestProfile();
+    })) return;
+    setUser({ name: '', room: '', phone: '', initial: '', role: 'student' });
+    setProfileDraft({ name: '', room: '', phone: '' });
+    setProfileErrors({});
+  };
 
   const isHome = currentPage === 'home';
 
@@ -158,58 +299,75 @@ export const Navbar = () => {
             <h3 id="student-profile-title" className="text-base font-bold text-[#F5F7F2] mb-1">Student Profile</h3>
             <p className="text-[11px] text-[#9EA79C] mb-4">Set your hostel details for instant desk identification.</p>
 
-            <div className="space-y-3.5">
-              <div>
-                <label className="block text-[#9EA79C] mb-1 font-semibold uppercase tracking-wider text-[10px]">Student Name</label>
-                <input
-                  type="text"
-                  value={profileDraft.name}
-                  placeholder="Enter your full name"
-                  onChange={(e) => setProfileDraft({ ...profileDraft, name: e.target.value })}
-                  autoComplete="name"
-                  className="w-full glass-input rounded-xl px-3.5 py-2 text-[#F5F7F2] focus:outline-none"
-                />
-              </div>
+            <form onSubmit={handleProfileSave} aria-busy={Boolean(profileRequest)}>
+              <fieldset disabled={Boolean(profileRequest)} className="space-y-3.5">
+                <div>
+                  <label htmlFor="profile-name" className="block text-[#9EA79C] mb-1 font-semibold uppercase tracking-wider text-[10px]">Student Name</label>
+                  <input
+                    type="text"
+                    id="profile-name"
+                    aria-invalid={Boolean(profileErrors.name)}
+                    aria-describedby={profileErrors.name ? "profile-name-error" : undefined}
+                    value={profileDraft.name}
+                    placeholder="Enter your full name"
+                    onChange={(e) => { setProfileDraft({ ...profileDraft, name: e.target.value }); setProfileErrors({ ...profileErrors, name: undefined }); }}
+                    autoComplete="name"
+                    className="w-full glass-input rounded-xl px-3.5 py-2 text-[#F5F7F2] focus:outline-none"
+                  />
+                  {profileErrors.name && <p id="profile-name-error" role="alert" className="mt-1 text-red-400">{profileErrors.name}</p>}
+                </div>
 
-              <div>
-                <label className="block text-[#9EA79C] mb-1 font-semibold uppercase tracking-wider text-[10px]">Room Number</label>
-                <input
-                  type="text"
-                  value={profileDraft.room}
-                  placeholder="Enter your room number and block"
-                  onChange={(e) => setProfileDraft({ ...profileDraft, room: e.target.value })}
-                  className="w-full glass-input rounded-xl px-3.5 py-2 text-[#F5F7F2] focus:outline-none"
-                />
-              </div>
+                <div>
+                  <label htmlFor="profile-room" className="block text-[#9EA79C] mb-1 font-semibold uppercase tracking-wider text-[10px]">Room Number</label>
+                  <input
+                    type="text"
+                    id="profile-room"
+                    aria-invalid={Boolean(profileErrors.room)}
+                    aria-describedby={profileErrors.room ? "profile-room-error" : undefined}
+                    value={profileDraft.room}
+                    placeholder="Enter your room number and block"
+                    onChange={(e) => { setProfileDraft({ ...profileDraft, room: e.target.value }); setProfileErrors({ ...profileErrors, room: undefined }); }}
+                    className="w-full glass-input rounded-xl px-3.5 py-2 text-[#F5F7F2] focus:outline-none"
+                  />
+                  {profileErrors.room && <p id="profile-room-error" role="alert" className="mt-1 text-red-400">{profileErrors.room}</p>}
+                </div>
 
-              <div>
-                <label className="block text-[#9EA79C] mb-1 font-semibold uppercase tracking-wider text-[10px]">Mobile Number</label>
-                <input
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  value={profileDraft.phone}
-                  placeholder="Enter your mobile number"
-                  onChange={(e) => setProfileDraft({ ...profileDraft, phone: e.target.value })}
-                  className="w-full glass-input rounded-xl px-3.5 py-2 text-[#F5F7F2] focus:outline-none"
-                />
-              </div>
+                <div>
+                  <label htmlFor="profile-phone" className="block text-[#9EA79C] mb-1 font-semibold uppercase tracking-wider text-[10px]">Mobile Number</label>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    id="profile-phone"
+                    aria-invalid={Boolean(profileErrors.phone)}
+                    aria-describedby={profileErrors.phone ? "profile-phone-error" : undefined}
+                    value={profileDraft.phone}
+                    placeholder="Enter your mobile number"
+                    onChange={(e) => { setProfileDraft({ ...profileDraft, phone: e.target.value }); setProfileErrors({ ...profileErrors, phone: undefined }); }}
+                    className="w-full glass-input rounded-xl px-3.5 py-2 text-[#F5F7F2] focus:outline-none"
+                  />
+                  {profileErrors.phone && <p id="profile-phone-error" role="alert" className="mt-1 text-red-400">{profileErrors.phone}</p>}
+                </div>
 
-              <button
-                onClick={() => {
-                  const cleanName = profileDraft.name.trim();
-                  const cleanRoom = profileDraft.room.trim();
-                  const cleanPhone = profileDraft.phone.trim();
-                  if (!cleanName || !cleanRoom || cleanName.length > 120 || cleanRoom.length > 40 || !/^\+?[\d\s()-]{7,20}$/.test(cleanPhone)) return;
-                  setUser({ name: cleanName, room: cleanRoom, phone: cleanPhone, initial: cleanName[0]?.toUpperCase() || '', role: 'student' });
-                  closeProfile();
-                }}
-                className="w-full mt-2 py-2.5 rounded-xl bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-extrabold tracking-wide shadow-lime-glow transition-all"
-              >
-                Save & Close
-              </button>
-              <button type="button" onClick={() => { setUser({ name: '', room: '', phone: '', initial: '', role: 'student' }); setProfileDraft({ name: '', room: '', phone: '' }); }} className="w-full py-2 text-[#9EA79C] hover:text-[#F5F7F2]">Clear saved profile</button>
-            </div>
+                {otpSent && authSession?.user?.phone !== normalizePhone(profileDraft.phone) && (
+                  <div>
+                    <label htmlFor="profile-otp" className="block text-[#9EA79C] mb-1 font-semibold uppercase tracking-wider text-[10px]">SMS Verification Code</label>
+                    <input id="profile-otp" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otpCode} onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, ''))} placeholder="6-digit code" className="w-full glass-input rounded-xl px-3.5 py-2 text-[#F5F7F2] focus:outline-none" />
+                    <button type="button" onClick={verifyProfileOtp} className="w-full mt-2 py-2.5 rounded-xl bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-extrabold tracking-wide shadow-lime-glow transition-all">{profileRequest === 'verify' ? 'Verifying…' : 'Verify & Save Profile'}</button>
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  className="w-full mt-2 py-2.5 rounded-xl bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-extrabold tracking-wide shadow-lime-glow transition-all"
+                >
+                  {profileRequest === 'save' ? 'Saving…' : authSession?.user?.phone === normalizePhone(profileDraft.phone) ? 'Save & Close' : otpSent ? 'Send a new code' : 'Verify mobile & save'}
+                </button>
+                <button type="button" onClick={handleProfileClear} className="w-full py-2 text-[#9EA79C] hover:text-[#F5F7F2]">
+                  {profileRequest === 'clear' ? 'Clearing…' : 'Clear saved profile'}
+                </button>
+                {profileRequestError && <p role="status" className={profileRequestError.startsWith('Verification code sent') ? 'text-[#C6FF00]' : 'text-red-400'}>{profileRequestError}</p>}
+              </fieldset>
+            </form>
           </div>
         </div>
       )}

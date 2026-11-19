@@ -56,6 +56,7 @@ Deno.serve(async (req) => {
       .update({ payment_status: newStatus, booking_status: nextBookingStatus })
       .eq('id', bookingId)
       .eq('payment_status', 'Pending')
+      .in('booking_status', ['Confirmed', 'Pending Verification', 'confirmed', 'pending_verification', 'pending_payment'])
       .select('id, booking_reference')
       .maybeSingle();
     if (updateError) {

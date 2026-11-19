@@ -1,3 +1,4 @@
+import { ValidatedInput } from '../components/ValidatedInput';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
@@ -21,6 +22,7 @@ export const Checkout = () => {
     selectedDate,
     selectedDateFormatted,
     selectedSlot,
+    checkoutSlot,
     paymentMethod,
     setPaymentMethod,
     utrNumber,
@@ -36,7 +38,12 @@ export const Checkout = () => {
 
   const upiId = import.meta.env.VITE_UPI_ID || '7644940067@ptsbi';
   const qrCodeUrl = import.meta.env.VITE_QR_CODE_URL || '/upi_qr.jpg';
-  const endTime = getEndSlotTime(selectedSlot);
+  const displayTime = time => {
+    const [hours, minutes] = time.split(':').map(Number);
+    return (hours % 12 || 12) + ':' + String(minutes).padStart(2, '0') + (hours < 12 ? ' AM' : ' PM');
+  };
+  const startTime = checkoutSlot ? displayTime(checkoutSlot.start_time) : selectedSlot;
+  const endTime = checkoutSlot ? displayTime(checkoutSlot.end_time) : getEndSlotTime(selectedSlot);
   const totalAmount = selectedEquipment?.price || 50;
 
   const handleCopyUPI = () => {
@@ -48,6 +55,7 @@ export const Checkout = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     if (paymentMethod === 'UPI' && !/^\d{4}$/.test(utrNumber.trim())) {
       addToast('Enter the last 4 digits of your UPI transaction reference.', 'warning');
       return;
@@ -148,7 +156,7 @@ export const Checkout = () => {
               </div>
               <div className="flex items-center gap-3 text-[#9EA79C]">
                 <Clock className="w-4 h-4 text-[#C6FF00]" />
-                <span className="text-[#F5F7F2] font-bold">{selectedSlot} – {endTime} (1-HOUR PRECISION)</span>
+                <span className="text-[#F5F7F2] font-bold">{startTime} – {endTime}</span>
               </div>
             </div>
           </div>
@@ -260,7 +268,7 @@ export const Checkout = () => {
 
                 <label className="block space-y-2">
                   <span className="text-[10px] font-bold tracking-wider text-[#9EA79C]">UPI REFERENCE — LAST 4 DIGITS</span>
-                  <input
+                  <ValidatedInput
                     type="text"
                     value={utrNumber}
                     onChange={(event) => setUtrNumber(event.target.value.replace(/\D/g, '').slice(0, 4))}

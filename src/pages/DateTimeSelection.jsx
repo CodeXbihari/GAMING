@@ -1,7 +1,22 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import { hostelCalendarDay } from '../lib/hostelCalendar';
 import { supabase } from '../lib/supabase';
 import { ChevronLeft, ChevronRight, Clock, ArrowRight, Calendar as CalendarIcon, Zap, Crosshair, Shield } from 'lucide-react';
+
+async function fetchAvailability(equipmentId, date, signal) {
+  const key = equipmentId + '/' + date;
+  try {
+    const { data, error } = await supabase.functions.invoke('booking_availability', {
+      body: { equipment_id: equipmentId, date_iso: date },
+      signal
+    });
+    if (!error && Array.isArray(data?.unavailable_slots)) {
+      return { key, unavailable: data.unavailable_slots, slots: data.slots };
+    }
+  } catch {}
+  return { key, failed: true, unavailable: [] };
+}
 
 export const DateTimeSelection = () => {
   const {
@@ -13,18 +28,27 @@ export const DateTimeSelection = () => {
     selectedSlot,
     setSelectedSlot,
     setCurrentPage,
-    isSlotBooked,
-    activeTimeSlotLabels,
-    addToast
+    timeSlots,
+    setCheckoutSlot,
+    ensureStudentProfile
   } = useApp();
 
   // Local calendar view navigation state (year & month)
   const initialDate = selectedDate instanceof Date && !isNaN(selectedDate) ? selectedDate : new Date();
   const [clockNow, setClockNow] = useState(() => new Date());
   const [viewDate, setViewDate] = useState(() => new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
-  const [serverBookedSlots, setServerBookedSlots] = useState([]);
-  const [availabilityLoading, setAvailabilityLoading] = useState(true);
-  const [availabilityError, setAvailabilityError] = useState(false);
+  const equipmentId = selectedEquipment?.id;
+  const availabilityKey = equipmentId + '/' + selectedDateISO;
+  const [availability, setAvailability] = useState(null);
+  const [retry, setRetry] = useState(0);
+  const [checking, setChecking] = useState(false);
+  const checkoutCheck = useRef(null);
+  useEffect(() => () => checkoutCheck.current?.abort(), []);
+  const [slotError, setSlotError] = useState('');
+  const currentAvailability = availability?.key === availabilityKey ? availability : null;
+  const availabilityLoading = !currentAvailability;
+  const availabilityError = currentAvailability?.failed;
+  const serverBookedSlots = currentAvailability?.unavailable ?? [];
 
   useEffect(() => {
     const timer = window.setInterval(() => setClockNow(new Date()), 30_000);
@@ -32,28 +56,20 @@ export const DateTimeSelection = () => {
   }, []);
 
   useEffect(() => {
-    let active = true;
-    setAvailabilityLoading(true);
-    setAvailabilityError(false);
-    setServerBookedSlots([]);
-
-    supabase.functions.invoke('booking_availability', {
-      body: { equipment_id: selectedEquipment?.id, date_iso: selectedDateISO }
-    }).then(({ data, error }) => {
-      if (!active) return;
-      if (error || !Array.isArray(data?.unavailable_slots)) {
-        setAvailabilityError(true);
-        return;
-      }
-      setServerBookedSlots(data.unavailable_slots);
-    }).catch(() => {
-      if (active) setAvailabilityError(true);
-    }).finally(() => {
-      if (active) setAvailabilityLoading(false);
-    });
-
-    return () => { active = false; };
-  }, [selectedEquipment?.id, selectedDateISO]);
+    const controller = new AbortController();
+    const refresh = async () => {
+      const result = await fetchAvailability(equipmentId, selectedDateISO, controller.signal);
+      if (!controller.signal.aborted) setAvailability(result);
+    };
+    refresh();
+    const timer = window.setInterval(() => {
+      if (!document.hidden) refresh();
+    }, 30_000);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
+  }, [equipmentId, selectedDateISO, retry]);
 
   const viewYear = viewDate.getFullYear();
   const viewMonth = viewDate.getMonth();
@@ -65,9 +81,7 @@ export const DateTimeSelection = () => {
 
   // Today at midnight for disabling past dates
   const todayAtMidnight = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
+    return hostelCalendarDay();
   }, []);
 
   // Customers can book today and the following two calendar days.
@@ -148,61 +162,44 @@ export const DateTimeSelection = () => {
     return days;
   }, [viewYear, viewMonth, todayAtMidnight, maxBookableDate]);
 
-  // Slots to display
-  const availableSlots = activeTimeSlotLabels && activeTimeSlotLabels.length > 0
-    ? activeTimeSlotLabels
-    : ['09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM'];
-
-  const indiaClockParts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23'
-  }).formatToParts(clockNow);
-  const indiaPart = (type) => indiaClockParts.find((part) => part.type === type)?.value || '00';
-  const indiaTodayISO = `${indiaPart('year')}-${indiaPart('month')}-${indiaPart('day')}`;
-  const indiaCurrentMinutes = Number(indiaPart('hour')) * 60 + Number(indiaPart('minute'));
+  const slots = currentAvailability?.slots ?? timeSlots.filter(slot => slot.isActive).map(slot => ({
+    label: slot.label, start_time: slot.startTime, end_time: slot.endTime
+  }));
+  const availableSlots = slots.map(slot => slot.label);
   const isSlotPast = (slot) => {
-    if (selectedDateISO < indiaTodayISO) return true;
-    if (selectedDateISO > indiaTodayISO) return false;
-    const match = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(slot.trim());
-    if (!match) return true;
-    let hours = Number(match[1]) % 12;
-    if (match[3].toUpperCase() === 'PM') hours += 12;
-    const startMinutes = hours * 60 + Number(match[2]);
-    return startMinutes <= indiaCurrentMinutes;
+    const start = slots.find(item => item.label === slot)?.start_time;
+    return !start || new Date(selectedDateISO + 'T' + start + '+05:30').getTime() <= clockNow.getTime();
   };
 
   const handleDateSelect = (fullDate) => {
+    if (checking) return;
+    setSlotError('');
+    setSelectedSlot('');
     setSelectedDate(fullDate);
   };
 
-  const handleContinue = () => {
-    if (availabilityLoading) {
-      addToast('Checking live slot availability. Please wait a moment.', 'warning');
+  const handleContinue = async () => {
+    if (checkoutCheck.current || availabilityLoading || availabilityError) return;
+    if (!availableSlots.includes(selectedSlot) || isSlotPast(selectedSlot) || serverBookedSlots.includes(selectedSlot)) {
+      setSlotError('Select an available time before continuing.');
       return;
     }
-    if (!selectedSlot) {
-      addToast('Please select a 1-hour session slot.', 'warning');
+    if (!ensureStudentProfile()) return;
+    const controller = new AbortController();
+    checkoutCheck.current = controller;
+    setChecking(true);
+    const latest = await fetchAvailability(equipmentId, selectedDateISO, controller.signal);
+    if (controller.signal.aborted) return;
+    checkoutCheck.current = null;
+    setChecking(false);
+    setAvailability(latest);
+    const slot = (latest.slots ?? slots).find(item => item.label === selectedSlot);
+    if (latest.failed || !slot || latest.unavailable.includes(selectedSlot)
+      || new Date(selectedDateISO + 'T' + slot.start_time + '+05:30').getTime() <= Date.now()) {
+      setSlotError('This time can no longer be verified. Select an available time and try again.');
       return;
     }
-    if (isSlotPast(selectedSlot)) {
-      addToast('That time slot has already started. Choose a later slot.', 'warning');
-      return;
-    }
-    if (isSlotBooked && isSlotBooked(selectedEquipment?.id, selectedDateISO, selectedSlot)) {
-      addToast('Selected slot is already reserved. Please pick another slot.', 'warning');
-      return;
-    }
-    if (availabilityError) {
-      // The booking endpoint rechecks availability and the database prevents
-      // duplicate active reservations. Keep checkout usable if this optional
-      // availability read endpoint has not been deployed yet.
-      addToast('Live availability is unavailable. The booking service will recheck the slot at confirmation.', 'warning');
-    }
+    setCheckoutSlot(slot);
     setCurrentPage('checkout');
   };
 
@@ -337,17 +334,16 @@ export const DateTimeSelection = () => {
           {/* Slot Grid (dynamic rows of 3 columns) */}
           <div className="grid grid-cols-3 gap-3">
             {availableSlots.map((slot) => {
-              const isBooked = (isSlotBooked && isSlotBooked(selectedEquipment?.id, selectedDateISO, slot))
-                || serverBookedSlots.includes(slot);
+              const isBooked = serverBookedSlots.includes(slot);
               const hasPassed = isSlotPast(slot);
-              const isUnavailable = isBooked || hasPassed || availabilityLoading;
+              const isUnavailable = isBooked || hasPassed || availabilityLoading || availabilityError || checking;
               const isSelected = selectedSlot === slot && !isUnavailable;
 
               return (
                 <button
                   key={slot}
                   disabled={isUnavailable}
-                  onClick={() => setSelectedSlot(slot)}
+                  onClick={() => { setSelectedSlot(slot); setSlotError(''); }}
                   className={`py-3.5 px-2 rounded-2xl text-xs font-mono font-bold tracking-wide transition-all border flex flex-col items-center justify-center gap-1 ${
                     isUnavailable
                       ? 'bg-white/[0.02] text-[#4D5750] border-white/[0.04] cursor-not-allowed'
@@ -371,6 +367,10 @@ export const DateTimeSelection = () => {
             })}
           </div>
 
+          {slotError && <p role="alert" className="mt-3 text-xs text-red-400">{slotError}</p>}
+          {availabilityError && <p role="alert" className="mt-3 text-xs text-red-400">
+            Could not load availability. <button type="button" className="underline" onClick={() => { setAvailability(null); setRetry(value => value + 1); }}>Retry</button>
+          </p>}
           {availableSlots.length === 0 && (
             <div className="text-center py-8 text-xs font-mono text-[#687366]">
               NO ACTIVE SLOTS CONFIGURED BY ADMIN
@@ -408,7 +408,7 @@ export const DateTimeSelection = () => {
         <div className="flex flex-wrap items-center gap-6 text-xs font-mono text-[#9EA79C]">
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-[#C6FF00]" />
-            <span className="text-[#F5F7F2] font-bold">{selectedSlot || '11:00 AM'} (1-HR BLOCK)</span>
+            <span className="text-[#F5F7F2] font-bold">{selectedSlot || 'SELECT A TIME'}</span>
           </div>
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-[#C6FF00]" />
@@ -419,9 +419,10 @@ export const DateTimeSelection = () => {
         {/* Continue Button */}
         <button
           onClick={handleContinue}
+          disabled={checking || availabilityLoading || availabilityError}
           className="w-full lg:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-full bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-mono font-black text-xs tracking-wider uppercase shadow-lime-sm hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
         >
-          <span>PROCEED TO PAYMENT</span>
+          <span>{checking ? 'CHECKING AVAILABILITY…' : 'PROCEED TO PAYMENT'}</span>
           <ArrowRight className="w-4 h-4 stroke-[3]" />
         </button>
       </div>

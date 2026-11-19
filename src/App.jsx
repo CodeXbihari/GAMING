@@ -1,20 +1,21 @@
-import React from 'react';
+import { ValidatedInput } from './components/ValidatedInput';
+import React, { lazy, Suspense } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { ToastContainer } from './components/Toast';
 import { HomePage } from './pages/HomePage';
-import { EquipmentSelection } from './pages/EquipmentSelection';
-import { DateTimeSelection } from './pages/DateTimeSelection';
-import { Checkout } from './pages/Checkout';
-import { BookingConfirmation } from './pages/BookingConfirmation';
-import { MyBookings } from './pages/MyBookings';
-import { AdminLayout } from './components/AdminLayout';
-import { AdminDashboard } from './pages/admin/AdminDashboard';
-import { AdminEquipment } from './pages/admin/AdminEquipment';
-import { AdminPayments } from './pages/admin/AdminPayments';
-import { AdminBookings } from './pages/admin/AdminBookings';
-import { AdminTimeSlots } from './pages/admin/AdminTimeSlots';
+const EquipmentSelection = lazy(() => import('./pages/EquipmentSelection').then(module => ({ default: module.EquipmentSelection })));
+const DateTimeSelection = lazy(() => import('./pages/DateTimeSelection').then(module => ({ default: module.DateTimeSelection })));
+const Checkout = lazy(() => import('./pages/Checkout').then(module => ({ default: module.Checkout })));
+const BookingConfirmation = lazy(() => import('./pages/BookingConfirmation').then(module => ({ default: module.BookingConfirmation })));
+const MyBookings = lazy(() => import('./pages/MyBookings').then(module => ({ default: module.MyBookings })));
+const AdminLayout = lazy(() => import('./components/AdminLayout').then(module => ({ default: module.AdminLayout })));
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
+const AdminEquipment = lazy(() => import('./pages/admin/AdminEquipment').then(module => ({ default: module.AdminEquipment })));
+const AdminPayments = lazy(() => import('./pages/admin/AdminPayments').then(module => ({ default: module.AdminPayments })));
+const AdminBookings = lazy(() => import('./pages/admin/AdminBookings').then(module => ({ default: module.AdminBookings })));
+const AdminTimeSlots = lazy(() => import('./pages/admin/AdminTimeSlots').then(module => ({ default: module.AdminTimeSlots })));
 const MainContent = () => {
   const {
     currentPage,
@@ -42,7 +43,7 @@ const MainContent = () => {
       return <AdminSignIn signInAdmin={signInAdmin} setCurrentPage={setCurrentPage} />;
     }
 
-    if (authProfile?.role !== 'admin') {
+    if (authProfile?.id !== authSession.user.id || authProfile?.role !== 'admin') {
       return (
         <main className="min-h-screen bg-[#080A08] flex items-center justify-center p-5 text-center">
           <section className="glass-panel rounded-3xl p-8 max-w-md w-full">
@@ -108,9 +109,13 @@ const AdminSignIn = ({ signInAdmin, setCurrentPage }) => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (sending) return;
     setSending(true);
-    await signInAdmin(email, password);
-    setSending(false);
+    try {
+      await signInAdmin(email, password);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -124,7 +129,7 @@ const AdminSignIn = ({ signInAdmin, setCurrentPage }) => {
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <label className="block text-xs font-bold text-[#9EA79C]">
             ADMIN EMAIL
-            <input
+            <ValidatedInput
               type="email"
               autoComplete="email"
               required
@@ -136,7 +141,7 @@ const AdminSignIn = ({ signInAdmin, setCurrentPage }) => {
           </label>
           <label className="block text-xs font-bold text-[#9EA79C]">
             PASSWORD
-            <input
+            <ValidatedInput
               type="password"
               autoComplete="current-password"
               required
@@ -166,7 +171,9 @@ const AdminSignIn = ({ signInAdmin, setCurrentPage }) => {
 export default function App() {
   return (
     <AppProvider>
-      <MainContent />
+      <Suspense fallback={<p role="status" className="p-8 text-center text-[#C6FF00]">Loading…</p>}>
+        <MainContent />
+      </Suspense>
     </AppProvider>
   );
 }

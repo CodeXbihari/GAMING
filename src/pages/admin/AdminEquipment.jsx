@@ -1,3 +1,4 @@
+import { ValidatedInput } from '../../components/ValidatedInput';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Plus, Edit2, Trash2, X, Gamepad2, Crosshair, Wrench, Check, Upload, Image as ImageIcon, Link, Sparkles, RefreshCw } from 'lucide-react';
@@ -91,6 +92,8 @@ export const AdminEquipment = () => {
     addToast(`Applied ${preset.label} photo preset!`, 'success');
   };
 
+  const [saving, setSaving] = useState(false);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name.trim()) {
@@ -105,10 +108,16 @@ export const AdminEquipment = () => {
       )
     };
 
-    const saved = editingItem
-      ? await updateEquipment(editingItem.id, payload)
-      : await addEquipment(payload);
-    if (saved) setModalOpen(false);
+    if (saving) return;
+    setSaving(true);
+    try {
+      const saved = editingItem
+        ? await updateEquipment(editingItem.id, payload)
+        : await addEquipment(payload);
+      if (saved) setModalOpen(false);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -419,9 +428,10 @@ export const AdminEquipment = () => {
                 <label className="block text-[#9EA79C] font-bold uppercase tracking-wider mb-1.5">
                   Equipment Name *
                 </label>
-                <input
+                <ValidatedInput
                   type="text"
                   required
+                  pattern={String.raw`.*\S.*`}
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g. ASUS TUF Gaming Laptop"
@@ -435,10 +445,11 @@ export const AdminEquipment = () => {
                   <label className="block text-[#9EA79C] font-bold uppercase tracking-wider mb-1.5">
                     Asset Code *
                   </label>
-                  <input
+                  <ValidatedInput
                     type="text"
                     required
-                    value={formData.assetCode}
+                    pattern={String.raw`.*\S.*`}
+                  value={formData.assetCode}
                     onChange={(e) => setFormData({ ...formData, assetCode: e.target.value })}
                     className="w-full bg-[#171D18] border border-white/[0.1] rounded-2xl px-4 py-3 text-[#F5F7F2] focus:outline-none focus:border-[#C6FF00] font-mono text-sm"
                   />
@@ -448,7 +459,7 @@ export const AdminEquipment = () => {
                   <label className="block text-[#9EA79C] font-bold uppercase tracking-wider mb-1.5">
                     Rate (₹ / hr) *
                   </label>
-                  <input
+                  <ValidatedInput
                     type="number"
                     required
                     min="1"
@@ -544,9 +555,10 @@ export const AdminEquipment = () => {
                 </button>
                 <button
                   type="submit"
+                  disabled={saving}
                   className="px-6 py-3 rounded-full bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-black shadow-lime-sm transition-all cursor-pointer uppercase tracking-wider"
                 >
-                  SAVE & SYNC TO CUSTOMER UI
+                  {saving ? 'SAVING…' : 'SAVE & SYNC TO CUSTOMER UI'}
                 </button>
               </div>
 
