@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { hostelCalendarDay } from '../lib/hostelCalendar';
 import { supabase } from '../lib/supabase';
 
 const AppContext = createContext();
@@ -50,6 +49,12 @@ const INITIAL_EQUIPMENT = [
   }
 ];
 
+const DEFAULT_TIME_SLOTS = [
+  '09:00 AM', '10:00 AM', '11:00 AM',
+  '12:00 PM', '01:00 PM', '02:00 PM',
+  '03:00 PM', '04:00 PM', '05:00 PM'
+];
+
 const normalizeEquipmentStatus = (status) => {
   const value = String(status || 'Available');
   if (value.toLowerCase() === 'available') return 'Available';
@@ -81,19 +86,7 @@ const INITIAL_TIME_SLOTS = [
 
 export const AppProvider = ({ children }) => {
   // Navigation & Page State
-  const [currentPage, setPage] = useState(() => window.location.hash === '#admin' ? 'admin' : 'home');
-  const setCurrentPage = useCallback((page) => {
-    const url = new URL(window.location.href);
-    if (page === 'admin') url.hash = 'admin';
-    else if (url.hash === '#admin') url.hash = '';
-    if (url.href !== window.location.href) window.history.replaceState(null, '', url);
-    setPage(page);
-  }, []);
-  useEffect(() => {
-    const restoreRoute = () => setPage(page => window.location.hash === '#admin' ? 'admin' : page === 'admin' ? 'home' : page);
-    window.addEventListener('hashchange', restoreRoute);
-    return () => window.removeEventListener('hashchange', restoreRoute);
-  }, []);
+  const [currentPage, setCurrentPage] = useState('home');
   const [adminSubPage, setAdminSubPage] = useState('dashboard');
 
   // Supabase Auth is used for real admin access; the demo student profile below
@@ -105,12 +98,25 @@ export const AppProvider = ({ children }) => {
   const [authProfileError, setAuthProfileError] = useState('');
 
   useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!mounted) return;
+      if (error) console.warn('Could not restore Supabase session:', error.message);
+      setAuthSession(data?.session || null);
+      setAuthSessionReady(true);
+    }).catch((error) => {
+      if (!mounted) return;
+      console.warn('Could not restore Supabase session:', error);
+      setAuthSessionReady(true);
+    });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthSession(session);
       setAuthSessionReady(true);
     });
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -147,32 +153,10 @@ export const AppProvider = ({ children }) => {
     return () => { current = false; };
   }, [authSessionReady, authSession?.user?.id]);
 
-  useEffect(() => {
-    let current = true;
-    const studentId = authSession?.user?.id;
-    if (!studentId || !authSession?.user?.phone) return () => { current = false; };
-    supabase.from('student_booking_profiles')
-      .select('full_name, room_no, phone_number')
-      .eq('id', studentId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!current || !data) return;
-        setUser({
-          name: data.full_name,
-          room: data.room_no,
-          phone: data.phone_number,
-          initial: data.full_name?.[0]?.toUpperCase() || '',
-          role: 'student'
-        });
-      }).catch(() => {});
-    return () => { current = false; };
-  }, [authSession?.user?.id, authSession?.user?.phone]);
-
   // Booking Flow State
   const [selectedEquipment, setSelectedEquipment] = useState(() => INITIAL_EQUIPMENT[0]);
-  const [selectedDate, setSelectedDate] = useState(hostelCalendarDay);
-  const [checkoutSlot, setCheckoutSlot] = useState(null);
-  const [selectedSlot, setSelectedSlot] = useState('');
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [selectedSlot, setSelectedSlot] = useState('11:00 AM');
   const [paymentMethod, setPaymentMethod] = useState('UPI');
   const [utrNumber, setUtrNumber] = useState('');
   const [paymentProofName, setPaymentProofName] = useState(null);
@@ -220,12 +204,9 @@ export const AppProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     try {
       const savedProfile = JSON.parse(localStorage.getItem('hostel_student_profile') || 'null');
-      const legacyDemo = savedProfile?.room === 'Room 304, Block B'
-        && savedProfile?.phone === '+91 98765 43210'
-        && ['Shashank R.', 'Punit'].includes(savedProfile.name);
-      if (!legacyDemo && savedProfile?.name?.trim() && savedProfile?.room?.trim() && savedProfile?.phone?.trim()) {
-        return savedProfile;
-      }
+      if (savedProfile?.name?.trim() && savedProfile?.room?.trim() && savedProfile?.phone?.trim()
+        && savedProfile.name !== 'Shashank R.' && savedProfile.name !== 'Punit'
+        && savedProfile.phone !== '+91 98765 43210') return savedProfile;
     } catch {}
     return { name: '', initial: '', room: '', phone: '', role: 'student' };
   });
@@ -279,7 +260,7 @@ export const AppProvider = ({ children }) => {
   const signOutAdmin = async () => {
     let error;
     try {
-      ({ error } = await supabase.auth.signOut({ scope: 'local' }));
+      ({ error } = await supabase.auth.signOut());
     } catch (signOutError) {
       addToast('Could not sign out. Please try again.', 'error');
       return false;
@@ -308,6 +289,14 @@ export const AppProvider = ({ children }) => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `${days[selectedDate.getDay()]}, ${selectedDate.getDate()} ${months[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;
   }, [selectedDate]);
+
+  // Active time slot labels (for backward compat with DateTimeSelection)
+  const activeTimeSlotLabels = useMemo(() => {
+    if (timeSlots.length > 0) {
+      return timeSlots.filter(s => s.isActive).sort((a, b) => a.sortOrder - b.sortOrder).map(s => s.label);
+    }
+    return DEFAULT_TIME_SLOTS;
+  }, [timeSlots]);
 
   // ---------- Normalizers ----------
   const normalizeEquipment = (item) => {
@@ -365,7 +354,7 @@ export const AppProvider = ({ children }) => {
     utr: b.utr,
     submittedAt: b.created_at || b.submitted_at || b.submittedAt,
     studentName: b.student_name || b.studentName || 'Student',
-    roomNo: b.room_no || b.roomNo || 'Room unavailable',
+    roomNo: b.room_no || b.roomNo || 'Room 304, Block B',
     pin: b.pin || '4829',
     proof: b.proof
   });
@@ -438,7 +427,7 @@ export const AppProvider = ({ children }) => {
 
   useEffect(() => {
     if (!authSessionReady) return;
-    if (authSession?.user?.id && authProfile?.id === authSession.user.id && authProfile.role === 'admin') {
+    if (authProfile?.role === 'admin') {
       fetchBookings();
       return;
     }
@@ -449,7 +438,7 @@ export const AppProvider = ({ children }) => {
     } catch {
       setBookings([]);
     }
-  }, [authSessionReady, authSession?.user?.id, authProfile?.id, authProfile?.role, fetchBookings]);
+  }, [authSessionReady, authProfile?.role, fetchBookings]);
 
   // ---------- Time Slot CRUD ----------
   const addTimeSlot = async (slotData) => {
@@ -568,24 +557,30 @@ export const AppProvider = ({ children }) => {
     return `${String(hours).padStart(2, '0')}:00 ${nextPeriod}`;
   };
 
+  const isSlotBooked = (equipId, dateISO, slot) => {
+    return bookings.some((b) => {
+      const sameEquip = b.equipmentId === equipId;
+      const sameDate = b.dateISO === dateISO;
+      const sameSlot = b.slot === slot;
+      const isActive = b.status === 'Confirmed' || b.status === 'Pending Verification';
+      return sameEquip && sameDate && sameSlot && isActive;
+    });
+  };
+
   // Create booking action
-  const ensureStudentProfile = () => {
-    if (!authSession?.user?.phone) {
-      addToast('Verify your mobile number in Student Profile before booking.', 'warning');
-      setProfileModalOpen(true);
-      return false;
-    }
+  const createBooking = async (paymentData = {}) => {
     if (!user?.name?.trim() || !user?.room?.trim() || !user?.phone?.trim()) {
       addToast('Complete your name, room number, and mobile number in Profile before booking.', 'warning');
       setProfileModalOpen(true);
-      return false;
+      return null;
     }
-    return true;
-  };
-
-  const createBooking = async (paymentData = {}) => {
-    if (!ensureStudentProfile()) return null;
     const utr = String(paymentData.utr ?? utrNumber).trim();
+
+    // 1. Prevent duplicate / double booking check
+    if (isSlotBooked(selectedEquipment.id, selectedDateISO, selectedSlot)) {
+      addToast('Sorry, this slot was just booked by another student!', 'error');
+      return null;
+    }
 
     // Both methods reserve the slot; UPI payment remains pending admin verification.
     const isUPI = paymentMethod === 'UPI';
@@ -601,6 +596,8 @@ export const AppProvider = ({ children }) => {
         slot: selectedSlot,
         payment_method: paymentMethod,
         utr_last4: isUPI ? utr : null,
+        student_name: user.name,
+        room_no: user.room
       }
     });
 
@@ -660,22 +657,17 @@ export const AppProvider = ({ children }) => {
       return;
     }
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('bookings')
       .update({
         payment_status: 'Paid',
         booking_status: 'Confirmed'
       })
-      .eq('id', dbId)
-      .eq('payment_status', 'Pending')
-      .in('booking_status', ['Confirmed', 'Pending Verification', 'confirmed', 'pending_verification', 'pending_payment'])
-      .select('id')
-      .maybeSingle();
+      .eq('id', dbId);
 
-    if (error || !data) {
-      if (error) console.error('Error verifying payment in Supabase:', error);
-      else await fetchBookings();
-      addToast('Could not review this payment. The booking may have changed.', 'error');
+    if (error) {
+      console.error('Error verifying payment in Supabase:', error);
+      addToast('Failed to update payment status in database.', 'error');
       return;
     }
 
@@ -697,22 +689,17 @@ export const AppProvider = ({ children }) => {
       return;
     }
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('bookings')
       .update({
         payment_status: 'Rejected',
         booking_status: 'Cancelled'
       })
-      .eq('id', dbId)
-      .eq('payment_status', 'Pending')
-      .in('booking_status', ['Confirmed', 'Pending Verification', 'confirmed', 'pending_verification', 'pending_payment'])
-      .select('id')
-      .maybeSingle();
+      .eq('id', dbId);
 
-    if (error || !data) {
-      if (error) console.error('Error rejecting payment in Supabase:', error);
-      else await fetchBookings();
-      addToast('Could not review this payment. The booking may have changed.', 'error');
+    if (error) {
+      console.error('Error rejecting payment in Supabase:', error);
+      addToast('Failed to update status in database.', 'error');
       return;
     }
 
@@ -919,9 +906,6 @@ export const AppProvider = ({ children }) => {
         selectedDate,
         setSelectedDate,
         selectedSlot,
-        checkoutSlot,
-        setCheckoutSlot,
-        ensureStudentProfile,
         setSelectedSlot,
         selectedDateISO,
         selectedDateFormatted,
@@ -936,6 +920,7 @@ export const AppProvider = ({ children }) => {
         equipmentList,
         bookings,
         timeSlots,
+        activeTimeSlotLabels,
         user,
         setUser,
         profileModalOpen,
@@ -950,6 +935,7 @@ export const AppProvider = ({ children }) => {
         deleteEquipment,
         cancelBooking,
         getEndSlotTime,
+        isSlotBooked,
         fetchBookings,
         fetchEquipment,
         fetchTimeSlots,

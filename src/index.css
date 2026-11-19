@@ -180,6 +180,9 @@
   .hero-cinematic-content h1 { font-size: clamp(2rem, 9vw, 3.5rem); line-height: 1.04; letter-spacing: -.035em; overflow-wrap: anywhere; }
   .hero-cinematic-content .lg\:col-span-5 { gap: 1.1rem; }
   .hero-cinematic-content .lg\:col-span-7 { min-width: 0; width: 100%; }
+  .hero-cinematic-content .hero-stage, .hero-cinematic-content [class*="StoneProductStage"] { max-width: 100%; }
+  .hero-cinematic-art { bottom: 0; width: 100%; max-height: 60%; object-fit: contain; object-position: center bottom; opacity: .78; }
+  .hero-cinematic-shade { background: linear-gradient(180deg, #030603 0%, rgba(3,6,3,.85) 34%, rgba(3,6,3,.25) 68%, #060806 100%); }
 }
 @media (max-width: 430px) {
   .hero-cinematic-content .grid { gap: .75rem; }
@@ -201,30 +204,4 @@
     background: linear-gradient(0deg, #060806 0%, transparent 15%, transparent 50%, #030603 68%);
   }
   .hero-cinematic-content { min-height: 0; }
-}
-
-@media (max-width: 767px) {
-  .hero-cinematic-art {
-    inset: auto 0 2.75rem;
-    width: 100%;
-    height: 72%;
-    max-height: none;
-    aspect-ratio: auto;
-    object-position: center bottom;
-    opacity: .82;
-    mask-image: none;
-  }
-
-  .hero-cinematic-shade {
-    background: linear-gradient(180deg, #030603 4%, rgba(3, 6, 3, .65) 48%, rgba(3, 6, 3, .46) 72%, #060806 100%);
-  }
-
-  .hero-cinematic-content .hero-cinematic-dock .stone-stage-visual { display: none; }
-  .hero-cinematic-dock .stone-stage-action { justify-content: center; margin-top: .5rem; }
-  .hero-mobile-animation { z-index: -1; }
-  .hero-cinematic h1 { text-shadow: 0 2px 10px #030603; }
-}
-
-input[aria-invalid="true"] {
-  border-color: #f87171;
 }

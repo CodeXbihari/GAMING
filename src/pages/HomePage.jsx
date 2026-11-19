@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   ArrowUpRight, 
@@ -23,15 +23,6 @@ import { Hero3DBackground } from '../components/Hero3DBackground';
 
 export const HomePage = () => {
   const { setCurrentPage, setSelectedEquipment, equipmentList } = useApp();
-  const [mobileHero, setMobileHero] = useState(() => window.matchMedia('(max-width: 767px)').matches);
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 767px)');
-    const update = () => setMobileHero(media.matches);
-    media.addEventListener('change', update);
-    update();
-    return () => media.removeEventListener('change', update);
-  }, []);
-
   const [activeGearTab, setActiveGearTab] = useState('combo');
 
   // Interactive Hardware showcase details
@@ -123,7 +114,7 @@ export const HomePage = () => {
     <div className="relative min-h-screen bg-[#060806] text-[#F5F7F2] overflow-x-hidden selection:bg-[#C6FF00] selection:text-[#080A08]">
       
       {/* Interactive 3D Canvas Background in Hero */}
-      {!mobileHero && <Hero3DBackground />}
+      <Hero3DBackground />
 
       {/* Neo-Brutalist Micro Cyber Grid Backdrop */}
       <div className="absolute inset-0 bg-grid-cyber pointer-events-none opacity-40 -z-20" />
@@ -147,7 +138,6 @@ export const HomePage = () => {
       {/* 1. HERO SECTION: Cyber-Tech Editorial + 3D Stone Pedestal Hardware Stage  */}
       {/* ========================================================================= */}
       <section className="hero-cinematic">
-        {mobileHero && <Hero3DBackground mobile />}
         <img
           src="/images/hero-neon-hardware.png"
           alt="ASUS TUF laptop and EvoFox gamepads on neon-lit volcanic stone"
@@ -213,7 +203,7 @@ export const HomePage = () => {
                 <ArrowUpRight className="w-6 h-6 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
               </button>
 
-              <div className="flex basis-full flex-col items-center gap-0.5 text-center md:basis-auto md:items-start md:gap-0 md:pl-2 md:text-left">
+              <div className="hidden sm:flex flex-col text-left pl-2">
                 <span className="text-xs font-mono font-bold text-[#F5F7F2]">RATES FROM ₹20/HR</span>
                 <span className="text-[11px] text-[#9EA79C]">Instant UPI QR & Cash</span>
               </div>
@@ -223,7 +213,7 @@ export const HomePage = () => {
           </div>
 
           {/* Right Column: 3D Stone Pedestal Hardware Stage Component */}
-          <div className="hero-cinematic-dock lg:col-span-7 relative flex items-center justify-center">
+          <div className="lg:col-span-7 relative flex items-center justify-center">
             <StoneProductStage useHeroBackground onBook={() => handleBookGear('combo')} />
           </div>
 
@@ -391,7 +381,7 @@ export const HomePage = () => {
             {/* Visual Hardware Stage with Spec Tags */}
             <div className="lg:col-span-7 relative">
               <div className="relative aspect-[16/11] rounded-2xl overflow-hidden bg-[#040504] border-2 border-white/[0.08] group">
-                <img loading="lazy" decoding="async"
+                <img 
                   src={currentGear.image} 
                   alt={currentGear.title}
                   className="w-full h-full object-contain filter brightness-95 contrast-105 group-hover:scale-[1.02] transition-transform duration-700"
@@ -540,7 +530,7 @@ export const HomePage = () => {
             {/* Visual Hardware Card */}
             <div className="glass-panel rounded-3xl p-6 border-2 border-white/[0.08] relative overflow-hidden group shadow-2xl">
               <div className="relative aspect-[16/10] rounded-2xl overflow-hidden bg-[#040504] mb-4">
-                <img loading="lazy" decoding="async"
+                <img 
                   src="/images/controller-studio.jpg" 
                   alt="Pro Controller"
                   className="w-full h-full object-cover filter brightness-95 group-hover:scale-105 transition-transform duration-700" 

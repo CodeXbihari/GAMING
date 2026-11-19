@@ -1,4 +1,3 @@
-import { ValidatedInput } from '../components/ValidatedInput';
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
@@ -7,7 +6,6 @@ import confetti from 'canvas-confetti';
 
 export const BookingConfirmation = () => {
   const { latestBooking, bookings, setCurrentPage, addToast } = useApp();
-  const [gameChoiceError, setGameChoiceError] = useState(false);
   const [wantsGame, setWantsGame] = useState('');
   const [gameName, setGameName] = useState('');
   const [gameRequestSubmitted, setGameRequestSubmitted] = useState(false);
@@ -60,9 +58,8 @@ export const BookingConfirmation = () => {
 
   const handleGameRequestSubmit = async (event) => {
     event.preventDefault();
-    if (gameRequestSubmitting || gameRequestSubmitted) return;
     if (!wantsGame) {
-      setGameChoiceError(true);
+      addToast('Choose Yes or No to continue.', 'warning');
       return;
     }
     if (!booking.bookingAccessToken) {
@@ -228,7 +225,6 @@ export const BookingConfirmation = () => {
               aria-pressed={wantsGame === option.value}
               onClick={() => {
                 setWantsGame(option.value);
-                setGameChoiceError(false);
                 setGameRequestSubmitted(false);
                 if (option.value === 'no') setGameName('');
               }}
@@ -243,12 +239,10 @@ export const BookingConfirmation = () => {
           ))}
         </div>
 
-        {gameChoiceError && <p role="alert" className="text-xs text-red-400">Choose Yes or No to continue.</p>}
-
         {wantsGame === 'yes' && (
           <label className="block space-y-2">
             <span className="text-[10px] font-mono font-bold tracking-wider text-[#9EA79C]">GAME NAME</span>
-            <ValidatedInput
+            <input
               type="text"
               value={gameName}
               onChange={(event) => {
@@ -256,7 +250,6 @@ export const BookingConfirmation = () => {
                 setGameRequestSubmitted(false);
               }}
               required
-              pattern={String.raw`.*\S.*`}
               disabled={gameRequestSubmitted}
               maxLength={100}
               placeholder="Enter the game you want"

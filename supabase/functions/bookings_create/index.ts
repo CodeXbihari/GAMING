@@ -69,8 +69,8 @@ Deno.serve(async (req) => {
     const slot = typeof payload.slot === 'string' ? payload.slot.trim() : '';
     const paymentMethod = payload.payment_method ?? 'UPI';
     const utrLast4 = String(payload.utr_last4 ?? '').trim();
-    const authMatch = /^Bearer\s+(.+)$/i.exec(req.headers.get('Authorization') ?? '');
-    if (!authMatch) return jsonResponse({ error: 'Verify your mobile number before booking' }, 401);
+    const studentName = typeof payload.student_name === 'string' ? payload.student_name.trim() : '';
+    const roomNo = typeof payload.room_no === 'string' ? payload.room_no.trim() : '';
 
     if (!equipmentId || equipmentId.length > 100 || !slot || slot.length > 32) {
       return jsonResponse({ error: 'Choose valid equipment and a time slot' }, 400);
@@ -87,6 +87,10 @@ Deno.serve(async (req) => {
     if (paymentMethod === 'UPI' && !/^\d{4}$/.test(utrLast4)) {
       return jsonResponse({ error: 'Enter the last 4 digits of the UPI reference' }, 400);
     }
+    if (studentName.length > 120 || roomNo.length > 40 || /[\u0000-\u001f\u007f]/.test(`${studentName}${roomNo}`)) {
+      return jsonResponse({ error: 'Enter valid booking contact details' }, 400);
+    }
+
     const today = dateInIndia(new Date());
     if (dateISO < today || dateISO > addDays(today, 2)) {
       return jsonResponse({ error: 'Booking date is outside the allowed window' }, 400);
@@ -102,23 +106,6 @@ Deno.serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-
-    const { data: { user: student }, error: authError } = await admin.auth.getUser(authMatch[1]);
-    if (authError || !student?.phone) {
-      return jsonResponse({ error: 'Verify your mobile number before booking' }, 401);
-    }
-    const { data: studentProfile, error: studentProfileError } = await admin
-      .from('student_booking_profiles')
-      .select('full_name, room_no, phone_number')
-      .eq('id', student.id)
-      .maybeSingle();
-    if (studentProfileError) {
-      console.error('Could not load verified student details:', studentProfileError.code ?? 'unknown');
-      return jsonResponse({ error: 'Could not load your student profile' }, 503);
-    }
-    if (!studentProfile || studentProfile.phone_number !== student.phone) {
-      return jsonResponse({ error: 'Complete your verified student profile before booking' }, 403);
-    }
 
     const { data: configuredSlots, error: slotsError } = await admin
       .from('time_slots')
@@ -185,7 +172,6 @@ Deno.serve(async (req) => {
     const bookingReference = `#GH${randomNumber(10000000, 100000000)}`;
     const booking = {
       id: crypto.randomUUID(),
-      student_id: student.id,
       booking_reference: bookingReference,
       equipment_id: equipment.id,
       equipment_name: equipment.name,
@@ -201,8 +187,8 @@ Deno.serve(async (req) => {
       payment_method: paymentMethod,
       utr: paymentMethod === 'UPI' ? utrLast4 : null,
       created_at: new Date().toISOString(),
-      student_name: studentProfile.full_name,
-      room_no: studentProfile.room_no,
+      student_name: studentName || 'Student',
+      room_no: roomNo,
       pin: String(randomNumber(1000, 10000)),
       proof: null,
       booking_access_token_hash: await sha256Hex(bookingAccessToken),

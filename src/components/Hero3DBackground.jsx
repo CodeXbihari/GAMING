@@ -8,7 +8,7 @@ import React, { useEffect, useRef } from 'react';
  * 3. Volumetric glowing nebula blooms and mouse-following ambient light.
  * 4. Ambient 3D cyber dust particles that react to cursor movement.
  */
-export const Hero3DBackground = ({ mobile = false }) => {
+export const Hero3DBackground = () => {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export const Hero3DBackground = ({ mobile = false }) => {
 
     // Handle Resize
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       width = canvas.parentElement?.clientWidth || window.innerWidth;
       height = canvas.parentElement?.clientHeight || window.innerHeight;
 
@@ -51,8 +51,6 @@ export const Hero3DBackground = ({ mobile = false }) => {
     };
 
     resize();
-    const resizeObserver = mobile ? new ResizeObserver(resize) : null;
-    if (resizeObserver) resizeObserver.observe(canvas.parentElement);
     window.addEventListener('resize', resize);
 
     // Visibility observer to save battery/GPU when scrolled away
@@ -367,15 +365,13 @@ export const Hero3DBackground = ({ mobile = false }) => {
       window.removeEventListener('resize', resize);
       window.removeEventListener('mousemove', handleMouseMove);
       observer.disconnect();
-      resizeObserver?.disconnect();
     };
-  }, [mobile]);
+  }, []);
 
   return (
     <canvas
       ref={canvasRef}
-      className={mobile ? "hero-mobile-animation absolute inset-0 pointer-events-none" : "absolute inset-0 w-full h-full pointer-events-none -z-10"}
-      aria-hidden="true"
+      className="absolute inset-0 w-full h-full pointer-events-none -z-10"
       style={{ opacity: 0.92 }}
     />
   );

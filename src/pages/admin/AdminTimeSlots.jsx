@@ -1,4 +1,3 @@
-import { ValidatedInput } from '../../components/ValidatedInput';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
@@ -49,7 +48,6 @@ export const AdminTimeSlots = () => {
       sortOrder: nextOrder,
       isActive: true
     });
-    setRangeError('');
     setModalOpen(true);
   };
 
@@ -62,12 +60,8 @@ export const AdminTimeSlots = () => {
       sortOrder: slot.sortOrder || 1,
       isActive: slot.isActive !== false
     });
-    setRangeError('');
     setModalOpen(true);
   };
-
-  const [rangeError, setRangeError] = useState('');
-  const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -76,23 +70,13 @@ export const AdminTimeSlots = () => {
       return;
     }
 
-    if (saving) return;
-    if (formData.endTime <= formData.startTime) {
-      setRangeError('End time must be after start time.');
-      return;
+    let saved;
+    if (editingItem) {
+      saved = await updateTimeSlot(editingItem.id, formData);
+    } else {
+      saved = await addTimeSlot(formData);
     }
-    setSaving(true);
-    try {
-      let saved;
-      if (editingItem) {
-        saved = await updateTimeSlot(editingItem.id, formData);
-      } else {
-        saved = await addTimeSlot(formData);
-      }
-      if (saved) setModalOpen(false);
-    } finally {
-      setSaving(false);
-    }
+    if (saved) setModalOpen(false);
   };
 
   return (
@@ -287,10 +271,9 @@ export const AdminTimeSlots = () => {
                 <label className="block text-[#9EA79C] font-bold uppercase tracking-wider mb-1.5">
                   Slot Display Label
                 </label>
-                <ValidatedInput
+                <input
                   type="text"
                   required
-                  pattern={String.raw`.*\S.*`}
                   value={formData.label}
                   onChange={(e) => setFormData({ ...formData, label: e.target.value })}
                   placeholder="e.g. 09:00 AM, 06:30 PM"
@@ -303,11 +286,11 @@ export const AdminTimeSlots = () => {
                   <label className="block text-[#9EA79C] font-bold uppercase tracking-wider mb-1.5">
                     Start Time (24h)
                   </label>
-                  <ValidatedInput
+                  <input
                     type="time"
                     required
                     value={formData.startTime}
-                    onChange={(e) => { setRangeError(''); setFormData({ ...formData, startTime: e.target.value }); }}
+                    onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
                     className="w-full bg-[#171D18] border border-white/[0.1] rounded-2xl px-4 py-3 text-[#F5F7F2] focus:outline-none focus:border-[#C6FF00] font-mono text-sm"
                   />
                 </div>
@@ -316,16 +299,13 @@ export const AdminTimeSlots = () => {
                   <label className="block text-[#9EA79C] font-bold uppercase tracking-wider mb-1.5">
                     End Time (24h)
                   </label>
-                  <ValidatedInput
+                  <input
                     type="time"
                     required
                     value={formData.endTime}
-                    onChange={(e) => { setRangeError(''); setFormData({ ...formData, endTime: e.target.value }); }}
-                    aria-invalid={rangeError ? true : undefined}
-                    aria-describedby={rangeError ? 'slot-range-error' : undefined}
+                    onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
                     className="w-full bg-[#171D18] border border-white/[0.1] rounded-2xl px-4 py-3 text-[#F5F7F2] focus:outline-none focus:border-[#C6FF00] font-mono text-sm"
                   />
-                  {rangeError && <p id="slot-range-error" role="alert" className="mt-1 text-red-400">{rangeError}</p>}
                 </div>
               </div>
 
@@ -334,7 +314,7 @@ export const AdminTimeSlots = () => {
                   <label className="block text-[#9EA79C] font-bold uppercase tracking-wider mb-1.5">
                     Sort Order
                   </label>
-                  <ValidatedInput
+                  <input
                     type="number"
                     min="1"
                     required
@@ -367,10 +347,9 @@ export const AdminTimeSlots = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={saving}
                   className="px-6 py-3 rounded-full bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-black shadow-lime-sm transition-all cursor-pointer uppercase tracking-wider"
                 >
-                  {saving ? 'SAVING…' : 'SAVE SLOT'}
+                  SAVE SLOT
                 </button>
               </div>
             </form>
