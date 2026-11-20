@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
-  ArrowLeft,
   Copy,
   Check,
   ArrowRight,
@@ -75,17 +74,6 @@ export const Checkout = () => {
 
   return (
     <div className="relative min-h-[calc(100vh-80px)] py-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex flex-col justify-between">
-      {/* Back button */}
-      <div className="flex items-center gap-4 mb-6">
-        <button
-          onClick={() => setCurrentPage('datetime')}
-          className="inline-flex items-center gap-2 text-xs font-mono font-bold text-[#9EA79C] hover:text-[#C6FF00] transition-colors"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>[BACK_TO_SCHEDULE]</span>
-        </button>
-      </div>
-
       {/* Cyber-Tech Editorial Header */}
       <div className="mb-8 border-b border-white/[0.08] pb-5 flex flex-wrap items-end justify-between gap-4">
         <div>

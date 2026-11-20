@@ -46,7 +46,7 @@ export const EquipmentSelection = () => {
           name: item.name || (isCombo ? 'BATTLE STATION COMBO' : isLaptop ? 'ASUS TUF GAMING LAPTOP' : 'EVOFOX ELITE OPS WIRELESS'),
           type,
           tag: item.assetCode || (isCombo ? 'TUF_DUAL_COMBO' : isLaptop ? 'TUF_RYZEN7_7435HS' : 'EVOFOX_HYPERCONNECT'),
-          price: item.price || (isCombo ? 80 : isLaptop ? 50 : 20),
+          price: item.price || (isCombo ? 90 : isLaptop ? 60 : 30),
           description: item.description || (isCombo
             ? 'ASUS TUF Laptop (Ryzen 7 7435HS/RTX 3050) + 2x EvoFox Wireless Gamepads on Stone Dock'
             : isLaptop

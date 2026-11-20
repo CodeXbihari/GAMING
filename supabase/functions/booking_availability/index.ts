@@ -64,11 +64,12 @@ Deno.serve(async (req) => {
     });
 
     const [{ data: slots, error: slotsError }, { data: bookings, error: bookingsError }] = await Promise.all([
-      admin.from('time_slots').select('label, start_time, end_time').eq('is_active', true).order('sort_order'),
+      // Include inactive rows so students can see slots paused by an admin.
+      admin.from('time_slots').select('label, start_time, end_time, is_active').order('sort_order'),
+      // A time slot is shared across the equipment fleet, not per rig.
       admin.from('bookings').select('slot, start_time, end_time')
-        .eq('equipment_id', equipmentId)
         .eq('booking_date', dateISO)
-        .in('booking_status', ['Confirmed', 'Pending Verification', 'confirmed', 'pending_verification', 'pending_payment']),
+        .in('booking_status', ['Confirmed', 'Pending Verification', 'Pending Payment', 'confirmed', 'pending_verification', 'pending_payment']),
     ]);
 
     if (slotsError || bookingsError) {
@@ -86,7 +87,11 @@ Deno.serve(async (req) => {
       );
     })).map((slot) => slot.label);
 
-    return respond({ unavailable_slots: unavailableSlots });
+    return respond({
+      slots: slots ?? [],
+      unavailable_slots: unavailableSlots,
+      cancelled_slots: (slots ?? []).filter((slot) => !slot.is_active).map((slot) => slot.label),
+    });
   } catch (error) {
     console.error('Availability request failed:', error instanceof Error ? error.name : 'Unknown error');
     return respond({ error: 'Could not load booking availability' }, 500);

@@ -8,7 +8,7 @@ const INITIAL_EQUIPMENT = [
     id: 'b1111111-1111-1111-1111-111111111111',
     name: 'ASUS TUF Gaming Laptop',
     assetCode: 'LAP-001',
-    price: 50,
+    price: 60,
     unit: 'hour',
     description: 'AMD Ryzen 7 7435HS • NVIDIA RTX 3050 4GB • 16GB RAM • 512GB SSD',
     specs: 'Ryzen 7 7435HS • RTX 3050 4GB • 16GB RAM • 512GB SSD • 144Hz FHD',
@@ -22,7 +22,7 @@ const INITIAL_EQUIPMENT = [
     id: 'b2222222-2222-2222-2222-222222222222',
     name: 'EvoFox Elite Ops Wireless',
     assetCode: 'CON-001',
-    price: 20,
+    price: 30,
     unit: 'hour',
     description: 'EvoFox Hyperconnect 2.4GHz Wireless Gamepad',
     specs: 'Hyperconnect™ 2.4GHz USB • Dual Rumble Motors • Textured Grips',
@@ -36,7 +36,7 @@ const INITIAL_EQUIPMENT = [
     id: 'b3333333-3333-3333-3333-333333333333',
     name: 'Battle Station Combo',
     assetCode: 'CMB-001',
-    price: 80,
+    price: 90,
     unit: 'hour',
     description: 'Complete Dual Setup (ASUS TUF Laptop + 2x EvoFox Gamepads)',
     specs: 'TUF Ryzen 7 7435HS • RTX 3050 4GB + 2x EvoFox Hyperconnect Gamepads',
@@ -304,7 +304,7 @@ export const AppProvider = ({ children }) => {
     const normalizedStatus = normalizeEquipmentStatus(item.status);
     const isLaptop = type === 'laptop';
     const isCombo = type === 'combo';
-    const defaultPrice = isCombo ? 80 : isLaptop ? 50 : 20;
+    const defaultPrice = isCombo ? 90 : isLaptop ? 60 : 30;
 
     const defaultImage = isCombo 
       ? '/images/combo-setup.jpg' 
@@ -346,6 +346,8 @@ export const AppProvider = ({ children }) => {
     dateISO: b.booking_date || b.date_iso || b.dateISO,
     time: b.time_range || b.time || `${b.start_time || ''} - ${b.end_time || ''}`,
     slot: b.slot || b.start_time || '11:00 AM',
+    startTime: b.start_time || null,
+    endTime: b.end_time || null,
     price: Number(b.total_amount || b.price || 50),
     duration: b.duration || '1 Hour',
     status: normalizeBookingStatus(b.booking_status || b.status),
@@ -511,25 +513,30 @@ export const AppProvider = ({ children }) => {
 
   const deleteTimeSlot = async (id) => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('time_slots')
-        .delete()
-        .eq('id', id);
+        .update({ is_active: false })
+        .eq('id', id)
+        .select('id, label, is_active')
+        .single();
 
       if (error) {
-        console.warn('Supabase delete time_slots failed:', error.message);
-        addToast(`Could not remove time slot: ${error.message}`, 'error');
+        console.warn('Supabase cancel time slot failed:', error.message);
+        addToast(`Could not cancel time slot: ${error.message}`, 'error');
         return false;
       }
+
+      const cancelledSlot = data || timeSlots.find((slot) => slot.id === id);
+      setTimeSlots((prev) => prev.map((slot) => (
+        slot.id === id ? { ...slot, isActive: false } : slot
+      )));
+      addToast(`Time slot "${cancelledSlot?.label || ''}" cancelled. Students will see it as unavailable.`, 'success');
+      return true;
     } catch (e) {
-      console.warn('deleteTimeSlot exception:', e);
-      addToast('Could not remove the time slot. Check your connection and admin access.', 'error');
+      console.warn('cancelTimeSlot exception:', e);
+      addToast('Could not cancel the time slot. Check your connection and admin access.', 'error');
       return false;
     }
-
-    setTimeSlots(prev => prev.filter(s => s.id !== id));
-    addToast('Time slot removed.', 'success');
-    return true;
   };
 
   const toggleTimeSlot = async (id) => {
@@ -558,12 +565,18 @@ export const AppProvider = ({ children }) => {
   };
 
   const isSlotBooked = (equipId, dateISO, slot) => {
+    const selectedTimeSlot = timeSlots.find((item) => item.label === slot);
     return bookings.some((b) => {
-      const sameEquip = b.equipmentId === equipId;
       const sameDate = b.dateISO === dateISO;
       const sameSlot = b.slot === slot;
       const isActive = b.status === 'Confirmed' || b.status === 'Pending Verification';
-      return sameEquip && sameDate && sameSlot && isActive;
+      const overlaps = Boolean(
+        selectedTimeSlot?.startTime && selectedTimeSlot?.endTime
+        && b.startTime && b.endTime
+        && selectedTimeSlot.startTime < b.endTime
+        && selectedTimeSlot.endTime > b.startTime
+      );
+      return sameDate && (sameSlot || overlaps) && isActive;
     });
   };
 
@@ -629,19 +642,20 @@ export const AppProvider = ({ children }) => {
     }
 
     const inserted = normalizeBooking(data.booking);
-    const confirmationBooking = { ...inserted, bookingAccessToken: data.booking_access_token };
+    const bookingWithAccessToken = { ...inserted, bookingAccessToken: data.booking_access_token };
+    const confirmationBooking = bookingWithAccessToken;
 
     try {
       const saved = sessionStorage.getItem('hostel_guest_bookings');
       const previousGuestBookings = saved ? JSON.parse(saved) : [];
-      const nextGuestBookings = [inserted, ...(Array.isArray(previousGuestBookings) ? previousGuestBookings : [])
+      const nextGuestBookings = [bookingWithAccessToken, ...(Array.isArray(previousGuestBookings) ? previousGuestBookings : [])
         .filter((booking) => booking.id !== inserted.id)].slice(0, 20);
       sessionStorage.setItem('hostel_guest_bookings', JSON.stringify(nextGuestBookings));
       sessionStorage.setItem('hostel_latest_booking', JSON.stringify(confirmationBooking));
     } catch {
       // Booking success must not depend on browser session storage being available.
     }
-    setBookings((prev) => [inserted, ...prev.filter((booking) => booking.id !== inserted.id)]);
+    setBookings((prev) => [bookingWithAccessToken, ...prev.filter((booking) => booking.id !== inserted.id)]);
     setLatestBooking(confirmationBooking);
     setCurrentPage('confirmation');
     addToast(`Booking ${inserted.id} submitted successfully!`, 'success');
@@ -753,6 +767,40 @@ export const AppProvider = ({ children }) => {
     addToast(`Booking ${bookingIdentifier} has been cancelled. Its slot is available again.`, 'success');
     return true;
   };
+
+  const refreshGuestBookingStatuses = useCallback(async () => {
+    if (authProfile?.role === 'admin') return;
+    const tokenById = new Map();
+    bookings.forEach((booking) => {
+      if (booking.bookingAccessToken) tokenById.set(booking.id, booking.bookingAccessToken);
+    });
+    const latest = (() => {
+      try { return JSON.parse(sessionStorage.getItem('hostel_latest_booking') || 'null'); } catch { return null; }
+    })();
+    if (latest?.id && latest.bookingAccessToken) tokenById.set(latest.id, latest.bookingAccessToken);
+
+    const statusUpdates = await Promise.all(bookings.map(async (booking) => {
+      const accessToken = tokenById.get(booking.id);
+      if (!accessToken) return null;
+      const { data, error } = await supabase.functions.invoke('booking_status', {
+        body: { booking_id: booking.id, booking_access_token: accessToken }
+      });
+      if (error || !data?.booking_status) return null;
+      return [booking.id, { status: normalizeBookingStatus(data.booking_status), paymentStatus: data.payment_status || booking.paymentStatus }];
+    }));
+    const updates = new Map(statusUpdates.filter(Boolean));
+    if (!updates.size) return;
+    setBookings((previous) => {
+      const changed = previous.some((booking) => {
+        const update = updates.get(booking.id);
+        return update && (booking.status !== update.status || booking.paymentStatus !== update.paymentStatus);
+      });
+      if (!changed) return previous;
+      const next = previous.map((booking) => updates.has(booking.id) ? { ...booking, ...updates.get(booking.id) } : booking);
+      try { sessionStorage.setItem('hostel_guest_bookings', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, [authProfile?.role, bookings]);
 
   // ---------- Equipment CRUD ----------
   const addEquipment = async (newItem) => {
@@ -934,6 +982,7 @@ export const AppProvider = ({ children }) => {
         updateEquipment,
         deleteEquipment,
         cancelBooking,
+        refreshGuestBookingStatuses,
         getEndSlotTime,
         isSlotBooked,
         fetchBookings,

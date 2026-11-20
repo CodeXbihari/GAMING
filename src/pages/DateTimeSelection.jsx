@@ -14,7 +14,7 @@ export const DateTimeSelection = () => {
     setSelectedSlot,
     setCurrentPage,
     isSlotBooked,
-    activeTimeSlotLabels,
+    timeSlots,
     addToast
   } = useApp();
 
@@ -22,7 +22,9 @@ export const DateTimeSelection = () => {
   const initialDate = selectedDate instanceof Date && !isNaN(selectedDate) ? selectedDate : new Date();
   const [clockNow, setClockNow] = useState(() => new Date());
   const [viewDate, setViewDate] = useState(() => new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
+  const [serverSlots, setServerSlots] = useState(null);
   const [serverBookedSlots, setServerBookedSlots] = useState([]);
+  const [serverCancelledSlots, setServerCancelledSlots] = useState([]);
   const [availabilityLoading, setAvailabilityLoading] = useState(true);
   const [availabilityError, setAvailabilityError] = useState(false);
 
@@ -35,24 +37,35 @@ export const DateTimeSelection = () => {
     let active = true;
     setAvailabilityLoading(true);
     setAvailabilityError(false);
+    setServerSlots(null);
     setServerBookedSlots([]);
+    setServerCancelledSlots([]);
 
-    supabase.functions.invoke('booking_availability', {
-      body: { equipment_id: selectedEquipment?.id, date_iso: selectedDateISO }
-    }).then(({ data, error }) => {
-      if (!active) return;
-      if (error || !Array.isArray(data?.unavailable_slots)) {
-        setAvailabilityError(true);
-        return;
+    const refreshAvailability = async (initial = false) => {
+      if (initial) setAvailabilityLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('booking_availability', {
+          body: { equipment_id: selectedEquipment?.id, date_iso: selectedDateISO }
+        });
+        if (!active) return;
+        if (error || !Array.isArray(data?.unavailable_slots) || !Array.isArray(data?.slots)) {
+          setAvailabilityError(true);
+          return;
+        }
+        setAvailabilityError(false);
+        setServerSlots(data.slots);
+        setServerBookedSlots(data.unavailable_slots);
+        setServerCancelledSlots(Array.isArray(data.cancelled_slots) ? data.cancelled_slots : []);
+      } catch {
+        if (active) setAvailabilityError(true);
+      } finally {
+        if (active && initial) setAvailabilityLoading(false);
       }
-      setServerBookedSlots(data.unavailable_slots);
-    }).catch(() => {
-      if (active) setAvailabilityError(true);
-    }).finally(() => {
-      if (active) setAvailabilityLoading(false);
-    });
+    };
 
-    return () => { active = false; };
+    refreshAvailability(true);
+    const refreshTimer = window.setInterval(() => refreshAvailability(false), 15_000);
+    return () => { active = false; window.clearInterval(refreshTimer); };
   }, [selectedEquipment?.id, selectedDateISO]);
 
   const viewYear = viewDate.getFullYear();
@@ -149,9 +162,10 @@ export const DateTimeSelection = () => {
   }, [viewYear, viewMonth, todayAtMidnight, maxBookableDate]);
 
   // Slots to display
-  const availableSlots = activeTimeSlotLabels && activeTimeSlotLabels.length > 0
-    ? activeTimeSlotLabels
-    : ['09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM'];
+  const availableSlots = (serverSlots ?? timeSlots)
+    .slice()
+    .sort((a, b) => (a.sort_order ?? a.sortOrder ?? 0) - (b.sort_order ?? b.sortOrder ?? 0));
+  const selectedSlotConfig = availableSlots.find((slot) => slot.label === selectedSlot);
 
   const indiaClockParts = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Asia/Kolkata',
@@ -198,10 +212,13 @@ export const DateTimeSelection = () => {
       return;
     }
     if (availabilityError) {
-      // The booking endpoint rechecks availability and the database prevents
-      // duplicate active reservations. Keep checkout usable if this optional
-      // availability read endpoint has not been deployed yet.
-      addToast('Live availability is unavailable. The booking service will recheck the slot at confirmation.', 'warning');
+      addToast('Could not confirm live availability. Please try again in a moment.', 'error');
+      return;
+    }
+    if (!selectedSlotConfig || selectedSlotConfig.is_active === false || selectedSlotConfig.isActive === false
+        || serverCancelledSlots.includes(selectedSlot) || serverBookedSlots.includes(selectedSlot)) {
+      addToast('That slot is unavailable. Please choose another time.', 'warning');
+      return;
     }
     setCurrentPage('checkout');
   };
@@ -336,11 +353,14 @@ export const DateTimeSelection = () => {
 
           {/* Slot Grid (dynamic rows of 3 columns) */}
           <div className="grid grid-cols-3 gap-3">
-            {availableSlots.map((slot) => {
+            {availableSlots.map((slotConfig) => {
+              const slot = slotConfig.label;
+              const isCancelled = slotConfig.is_active === false || slotConfig.isActive === false
+                || serverCancelledSlots.includes(slot);
               const isBooked = (isSlotBooked && isSlotBooked(selectedEquipment?.id, selectedDateISO, slot))
                 || serverBookedSlots.includes(slot);
               const hasPassed = isSlotPast(slot);
-              const isUnavailable = isBooked || hasPassed || availabilityLoading;
+              const isUnavailable = isCancelled || isBooked || hasPassed || availabilityLoading || availabilityError;
               const isSelected = selectedSlot === slot && !isUnavailable;
 
               return (
@@ -357,12 +377,16 @@ export const DateTimeSelection = () => {
                   }`}
                 >
                   <span>{slot}</span>
-                  {isBooked ? (
+                  {isCancelled ? (
+                    <span className="text-[8px] text-amber-300 font-bold uppercase tracking-wider">CANCELLED BY ADMIN</span>
+                  ) : isBooked ? (
                     <span className="text-[8px] text-[#FF453A] font-bold uppercase tracking-wider">BOOKED</span>
                   ) : hasPassed ? (
                     <span className="text-[8px] text-[#687366] font-bold uppercase tracking-wider">PASSED</span>
                   ) : availabilityLoading ? (
                     <span className="text-[8px] text-[#687366] font-bold uppercase tracking-wider">CHECKING</span>
+                  ) : availabilityError ? (
+                    <span className="text-[8px] text-amber-300 font-bold uppercase tracking-wider">AVAILABILITY ERROR</span>
                   ) : (
                     <span className="text-[8px] text-[#C6FF00]/80 font-mono">1-HOUR</span>
                   )}
@@ -373,7 +397,7 @@ export const DateTimeSelection = () => {
 
           {availableSlots.length === 0 && (
             <div className="text-center py-8 text-xs font-mono text-[#687366]">
-              NO ACTIVE SLOTS CONFIGURED BY ADMIN
+              NO TIME SLOTS CONFIGURED BY ADMIN
             </div>
           )}
         </div>

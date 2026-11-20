@@ -1,17 +1,25 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Calendar, Clock, ArrowRight, X, Download, ShieldCheck, KeyRound, Crosshair, Terminal } from 'lucide-react';
 
 export const MyBookings = () => {
-  const { bookings } = useApp();
+  const { bookings, refreshGuestBookingStatuses } = useApp();
   const [activeTab, setActiveTab] = useState('upcoming');
   const [selectedBookingModal, setSelectedBookingModal] = useState(null);
 
+  useEffect(() => {
+    refreshGuestBookingStatuses();
+    const timer = window.setInterval(refreshGuestBookingStatuses, 15000);
+    return () => window.clearInterval(timer);
+  }, [refreshGuestBookingStatuses]);
+
   const upcomingList = bookings.filter((b) => b.status === 'Confirmed' || b.status === 'Pending Verification');
   const pastList = bookings.filter((b) => b.status === 'Completed');
+  const cancelledList = bookings.filter((b) => b.status === 'Cancelled');
 
   const getDisplayedList = () => {
     if (activeTab === 'past') return pastList;
+    if (activeTab === 'cancelled') return cancelledList;
     return upcomingList;
   };
 
@@ -67,6 +75,17 @@ export const MyBookings = () => {
         >
           PAST ({pastList.length})
         </button>
+
+        <button
+          onClick={() => setActiveTab('cancelled')}
+          className={`px-6 py-2.5 rounded-full text-xs font-black tracking-wider uppercase transition-all ${
+            activeTab === 'cancelled'
+              ? 'bg-[#C6FF00] text-[#080A08] shadow-lime-sm'
+              : 'text-[#9EA79C] hover:text-[#F5F7F2]'
+          }`}
+        >
+          CANCELLED ({cancelledList.length})
+        </button>
       </div>
 
       {/* Bookings List with 3D Stone Podium Cards */}
@@ -117,7 +136,7 @@ export const MyBookings = () => {
                 {/* Right: Telemetry Badges & Action */}
                 <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-white/[0.06] font-mono">
                   <div className="flex flex-col gap-1 items-end">
-                    <span className="text-[10px] px-3 py-1 rounded-full font-black glass-pill text-[#C6FF00] uppercase border-[#C6FF00]/40">
+                    <span className={`text-[10px] px-3 py-1 rounded-full font-black glass-pill uppercase ${item.status === 'Cancelled' ? 'text-red-300 border-red-300/40' : 'text-[#C6FF00] border-[#C6FF00]/40'}`}>
                       {item.status || 'CONFIRMED'}
                     </span>
                     <span className="text-[10px] px-3 py-1 rounded-full font-black glass-pill text-[#C6FF00] uppercase border-[#C6FF00]/40">
@@ -176,7 +195,7 @@ export const MyBookings = () => {
               </div>
               <div className="flex justify-between items-center pt-3 border-t border-white/[0.08]">
                 <span className="text-[#9EA79C] font-bold">BOOKING STATUS:</span>
-                <span className="text-xs font-mono font-black text-[#C6FF00] glass-pill px-3.5 py-1.5 rounded-xl border-[#C6FF00]/50 shadow-lime-sm">
+                <span className={`text-xs font-mono font-black glass-pill px-3.5 py-1.5 rounded-xl ${selectedBookingModal.status === 'Cancelled' ? 'text-red-300 border-red-300/50' : 'text-[#C6FF00] border-[#C6FF00]/50 shadow-lime-sm'}`}>
                   {selectedBookingModal.status || 'CONFIRMED'}
                 </span>
               </div>

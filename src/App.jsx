@@ -15,10 +15,12 @@ import { AdminEquipment } from './pages/admin/AdminEquipment';
 import { AdminPayments } from './pages/admin/AdminPayments';
 import { AdminBookings } from './pages/admin/AdminBookings';
 import { AdminTimeSlots } from './pages/admin/AdminTimeSlots';
+import { ArrowLeft } from 'lucide-react';
 const MainContent = () => {
   const {
     currentPage,
     adminSubPage,
+    setAdminSubPage,
     authSession,
     authProfile,
     authLoading,
@@ -28,12 +30,41 @@ const MainContent = () => {
     setCurrentPage
   } = useApp();
 
+  const handleBack = () => {
+    if (currentPage === 'admin') {
+      if (adminSubPage !== 'dashboard') setAdminSubPage('dashboard');
+      else setCurrentPage('home');
+      return;
+    }
+    const previousPage = {
+      equipment: 'home',
+      datetime: 'equipment',
+      checkout: 'datetime',
+      confirmation: 'bookings',
+      bookings: 'home'
+    }[currentPage] || 'home';
+    setCurrentPage(previousPage);
+  };
+
+  const backButton = (
+    <button
+      type="button"
+      onClick={handleBack}
+      className="inline-flex items-center gap-2 text-xs font-mono font-bold text-[#9EA79C] hover:text-[#C6FF00] transition-colors"
+      aria-label="Go back"
+    >
+      <ArrowLeft className="w-4 h-4" />
+      <span>BACK</span>
+    </button>
+  );
+
   // If in Admin Mode
   if (currentPage === 'admin') {
     if (authLoading) {
       return (
-        <main className="min-h-screen bg-[#080A08] flex items-center justify-center text-xs font-mono text-[#9EA79C]">
-          CHECKING_ADMIN_ACCESS...
+        <main className="min-h-screen bg-[#080A08] flex flex-col items-center justify-center gap-5 text-xs font-mono text-[#9EA79C]">
+          {backButton}
+          <span>CHECKING_ADMIN_ACCESS...</span>
         </main>
       );
     }
@@ -66,6 +97,7 @@ const MainContent = () => {
 
     return (
       <AdminLayout>
+        <div className="mb-5">{backButton}</div>
         {adminSubPage === 'dashboard' && <AdminDashboard />}
         {adminSubPage === 'equipment' && <AdminEquipment />}
         {adminSubPage === 'bookings' && <AdminBookings />}
@@ -85,6 +117,12 @@ const MainContent = () => {
   return (
     <div className="min-h-screen flex flex-col bg-[#080A08] text-[#F5F7F2] relative">
       <Navbar />
+
+      {currentPage !== 'home' && (
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+          {backButton}
+        </div>
+      )}
 
       <main className="flex-1">
         {currentPage === 'home' && <HomePage />}

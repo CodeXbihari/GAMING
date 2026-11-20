@@ -150,14 +150,12 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Equipment price could not be verified' }, 503);
     }
 
-    const { data: existing, error: availabilityError } = await admin
+    const { data: existingBookings, error: availabilityError } = await admin
       .from('bookings')
-      .select('id')
-      .eq('equipment_id', equipmentId)
+      .select('id, slot, start_time, end_time')
       .eq('booking_date', dateISO)
-      .eq('slot', slot)
-      .in('booking_status', ['Confirmed', 'Pending Verification', 'confirmed', 'pending_verification', 'pending_payment'])
-      .maybeSingle();
+      .in('booking_status', ['Confirmed', 'Pending Verification', 'Pending Payment', 'confirmed', 'pending_verification', 'pending_payment'])
+      .limit(500);
     if (availabilityError) {
       console.error('Could not check booking availability:', availabilityError.code ?? 'unknown');
       return jsonResponse({
@@ -166,7 +164,15 @@ Deno.serve(async (req) => {
           : 'Could not check slot availability',
       }, 503);
     }
-    if (existing) return jsonResponse({ error: 'This slot is already booked' }, 409);
+    const slotAlreadyBooked = (existingBookings ?? []).some((booking) => (
+      booking.slot === slot
+      || Boolean(
+        booking.start_time && booking.end_time
+        && configuredSlot.start_time < booking.end_time
+        && configuredSlot.end_time > booking.start_time
+      )
+    ));
+    if (slotAlreadyBooked) return jsonResponse({ error: 'This time slot is already booked for another rig' }, 409);
 
     const bookingAccessToken = randomHexToken();
     const bookingReference = `#GH${randomNumber(10000000, 100000000)}`;
