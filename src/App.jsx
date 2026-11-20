@@ -33,7 +33,10 @@ const MainContent = () => {
     setCurrentPage
   } = useApp();
 
-  if (equipmentLoading) {
+  const isInventoryView = currentPage === 'equipment'
+    || (currentPage === 'admin' && adminSubPage === 'equipment');
+
+  if (isInventoryView && equipmentLoading) {
     return (
       <main className="min-h-screen bg-[#080A08] flex flex-col items-center justify-center gap-4 text-xs font-mono text-[#9EA79C]">
         <span className="w-8 h-8 rounded-full border-2 border-[#C6FF00]/25 border-t-[#C6FF00] animate-spin" aria-hidden="true" />
@@ -43,11 +46,11 @@ const MainContent = () => {
     );
   }
 
-  if (equipmentLoadError) {
+  if (isInventoryView && equipmentLoadError) {
     return (
       <main className="min-h-screen bg-[#080A08] flex flex-col items-center justify-center gap-4 px-5 text-center text-xs font-mono text-[#9EA79C]">
         <span className="text-[#F5F7F2]">{equipmentLoadError}</span>
-        <p className="max-w-md">The site is holding the cached photos back so an older inventory image is not shown as current.</p>
+        <p className="max-w-md">The cached inventory photos are hidden until the latest equipment data can be confirmed.</p>
         <button
           type="button"
           onClick={refreshEquipment}
