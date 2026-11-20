@@ -84,10 +84,39 @@ const INITIAL_TIME_SLOTS = [
   { id: 'ts-9', label: '05:00 PM', startTime: '17:00', endTime: '18:00', isActive: true, sortOrder: 9 }
 ];
 
+const CUSTOMER_PAGES = new Set(['home', 'equipment', 'datetime', 'checkout', 'confirmation', 'bookings']);
+const APP_PAGES = new Set([...CUSTOMER_PAGES, 'admin']);
+const ADMIN_PAGES = new Set(['dashboard', 'equipment', 'bookings', 'payments', 'timeslots', 'students', 'reports', 'settings']);
+
+const getStoredPage = (key, validPages, fallback) => {
+  try {
+    const value = localStorage.getItem(key);
+    return validPages.has(value) ? value : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 export const AppProvider = ({ children }) => {
   // Navigation & Page State
-  const [currentPage, setCurrentPage] = useState('home');
-  const [adminSubPage, setAdminSubPage] = useState('dashboard');
+  const [currentPage, setCurrentPageState] = useState(() => getStoredPage('hostel_current_page', APP_PAGES, 'home'));
+  const [adminSubPage, setAdminSubPageState] = useState(() => getStoredPage('hostel_admin_subpage', ADMIN_PAGES, 'dashboard'));
+  const setCurrentPage = useCallback((nextPage) => {
+    setCurrentPageState((previousPage) => {
+      const page = typeof nextPage === 'function' ? nextPage(previousPage) : nextPage;
+      const safePage = APP_PAGES.has(page) ? page : 'home';
+      try { localStorage.setItem('hostel_current_page', safePage); } catch {}
+      return safePage;
+    });
+  }, []);
+  const setAdminSubPage = useCallback((nextPage) => {
+    setAdminSubPageState((previousPage) => {
+      const page = typeof nextPage === 'function' ? nextPage(previousPage) : nextPage;
+      const safePage = ADMIN_PAGES.has(page) ? page : 'dashboard';
+      try { localStorage.setItem('hostel_admin_subpage', safePage); } catch {}
+      return safePage;
+    });
+  }, []);
 
   // Supabase Auth is used for real admin access; the demo student profile below
   // remains separate from the authenticated admin identity.
