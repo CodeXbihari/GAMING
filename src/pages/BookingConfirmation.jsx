@@ -5,13 +5,15 @@ import { Check, Calendar, Clock, Copy, ShieldCheck, KeyRound, Crosshair, Termina
 import confetti from 'canvas-confetti';
 
 export const BookingConfirmation = () => {
-  const { latestBooking, bookings, setCurrentPage, addToast } = useApp();
+  const { latestBooking, bookings, equipmentList, setCurrentPage, addToast } = useApp();
   const [wantsGame, setWantsGame] = useState('');
   const [gameName, setGameName] = useState('');
   const [gameRequestSubmitted, setGameRequestSubmitted] = useState(false);
   const [gameRequestSubmitting, setGameRequestSubmitting] = useState(false);
 
   const booking = latestBooking || bookings[0] || null;
+  const bookedEquipment = equipmentList.find((item) => item.id === booking?.equipmentId);
+  const isControllerBooking = String(booking?.equipmentCategory || bookedEquipment?.type || bookedEquipment?.category || '').toLowerCase() === 'controller';
 
   useEffect(() => {
     if (!booking) return;
@@ -200,8 +202,8 @@ export const BookingConfirmation = () => {
         </div>
       </div>
 
-      {/* Optional game download request */}
-      <form
+      {/* Game downloads are offered for console/laptop sessions, not controller-only bookings. */}
+      {!isControllerBooking && <form
         onSubmit={handleGameRequestSubmit}
         className="w-full max-w-md glass-panel rounded-3xl p-5 sm:p-6 mb-8 text-left space-y-4"
       >
@@ -272,7 +274,7 @@ export const BookingConfirmation = () => {
           </button>
         )}
         <p className="text-[10px] font-mono text-[#687366]">Your preference is saved with this reservation.</p>
-      </form>
+      </form>}
 
       {/* Action Buttons */}
       <div className="flex flex-row items-center justify-center gap-4 w-full max-w-sm">

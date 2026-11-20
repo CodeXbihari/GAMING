@@ -341,6 +341,7 @@ export const AppProvider = ({ children }) => {
     id: b.booking_reference || b.id,
     dbId: b.id,
     equipmentId: b.equipment_id || b.equipmentId,
+    equipmentCategory: b.equipment_category || equipmentList.find((item) => item.id === (b.equipment_id || b.equipmentId))?.type || equipmentList.find((item) => item.id === (b.equipment_id || b.equipmentId))?.category || '',
     equipmentName: b.equipment_name || b.equipmentName || 'Equipment',
     date: b.date || b.booking_date,
     dateISO: b.booking_date || b.date_iso || b.dateISO,
