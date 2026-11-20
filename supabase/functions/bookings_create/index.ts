@@ -49,6 +49,8 @@ const sha256Hex = async (value: string) => {
 const schemaError = (error: { code?: string } | null) =>
   ['PGRST204', 'PGRST205', '42703', '42P01'].includes(error?.code ?? '');
 
+const isUuidShape = (value: string) => /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value);
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
@@ -73,6 +75,9 @@ Deno.serve(async (req) => {
     const roomNo = typeof payload.room_no === 'string' ? payload.room_no.trim() : '';
 
     if (!equipmentId || equipmentId.length > 100 || !slot || slot.length > 32) {
+      return jsonResponse({ error: 'Choose valid equipment and a time slot' }, 400);
+    }
+    if (!isUuidShape(equipmentId)) {
       return jsonResponse({ error: 'Choose valid equipment and a time slot' }, 400);
     }
     const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(dateISO)
@@ -144,35 +149,47 @@ Deno.serve(async (req) => {
     if (String(equipment.status ?? '').toLowerCase() !== 'available') {
       return jsonResponse({ error: 'Equipment is unavailable' }, 409);
     }
+    if (String(equipment.category ?? equipment.type ?? '').toLowerCase() !== 'controller') {
+      return jsonResponse({ error: 'Time slots are currently available only for controller rigs' }, 409);
+    }
     const price = Number(equipment.price_per_hour ?? equipment.price);
     if (!Number.isFinite(price) || price < 0) {
       console.error('Equipment has an invalid configured price');
       return jsonResponse({ error: 'Equipment price could not be verified' }, 503);
     }
 
-    const { data: existingBookings, error: availabilityError } = await admin
+    const [{ data: controllerRigs, error: controllerRigsError }, { data: existingBookings, error: availabilityError }] = await Promise.all([
+      admin.from('equipment').select('id, inventory_count').eq('category', 'controller').eq('status', 'Available'),
+      admin
       .from('bookings')
-      .select('id, slot, start_time, end_time')
+      .select('id, equipment_id, slot, start_time, end_time')
       .eq('booking_date', dateISO)
       .in('booking_status', ['Confirmed', 'Pending Verification', 'Pending Payment', 'confirmed', 'pending_verification', 'pending_payment'])
-      .limit(500);
-    if (availabilityError) {
-      console.error('Could not check booking availability:', availabilityError.code ?? 'unknown');
+      .limit(500),
+    ]);
+    if (controllerRigsError || availabilityError) {
+      console.error('Could not check controller availability:', controllerRigsError?.code ?? availabilityError?.code ?? 'unknown');
       return jsonResponse({
-        error: schemaError(availabilityError)
+        error: schemaError(controllerRigsError || availabilityError)
           ? 'Booking backend is out of date. Apply the Supabase migrations and redeploy the booking function.'
           : 'Could not check slot availability',
       }, 503);
     }
-    const slotAlreadyBooked = (existingBookings ?? []).some((booking) => (
-      booking.slot === slot
-      || Boolean(
+    const controllerIds = new Set((controllerRigs ?? []).map((rig) => rig.id));
+    const matchingControllerBookings = (existingBookings ?? []).filter((booking) => (
+      controllerIds.has(booking.equipment_id)
+      && (booking.slot === slot || Boolean(
         booking.start_time && booking.end_time
         && configuredSlot.start_time < booking.end_time
         && configuredSlot.end_time > booking.start_time
-      )
+      ))
     ));
-    if (slotAlreadyBooked) return jsonResponse({ error: 'This time slot is already booked for another rig' }, 409);
+    const controllerCapacity = (controllerRigs ?? []).reduce((total, rig) => total + Math.max(1, Number(rig.inventory_count) || 1), 0);
+    const selectedRigCapacity = Math.max(1, Number(equipment.inventory_count) || 1);
+    const selectedRigBookings = matchingControllerBookings.filter((booking) => booking.equipment_id === equipment.id).length;
+    if (matchingControllerBookings.length >= controllerCapacity || selectedRigBookings >= selectedRigCapacity) {
+      return jsonResponse({ error: 'All controller units are booked for this time slot' }, 409);
+    }
 
     const bookingAccessToken = randomHexToken();
     const bookingReference = `#GH${randomNumber(10000000, 100000000)}`;

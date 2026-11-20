@@ -566,7 +566,9 @@ export const AppProvider = ({ children }) => {
 
   const isSlotBooked = (equipId, dateISO, slot) => {
     const selectedTimeSlot = timeSlots.find((item) => item.label === slot);
-    return bookings.some((b) => {
+    const selectedRig = equipmentList.find((item) => item.id === equipId);
+    const selectedCapacity = Math.max(1, Number(selectedRig?.inventoryCount) || 1);
+    const overlappingCount = bookings.filter((b) => {
       const sameDate = b.dateISO === dateISO;
       const sameSlot = b.slot === slot;
       const isActive = b.status === 'Confirmed' || b.status === 'Pending Verification';
@@ -576,8 +578,9 @@ export const AppProvider = ({ children }) => {
         && selectedTimeSlot.startTime < b.endTime
         && selectedTimeSlot.endTime > b.startTime
       );
-      return sameDate && (sameSlot || overlaps) && isActive;
-    });
+      return sameDate && b.equipmentId === equipId && (sameSlot || overlaps) && isActive;
+    }).length;
+    return overlappingCount >= selectedCapacity;
   };
 
   // Create booking action
@@ -628,6 +631,10 @@ export const AppProvider = ({ children }) => {
       console.error('Booking service request failed:', error?.message || backendMessage || 'Invalid response');
       const message = backendMessage === 'This slot is already booked'
         ? 'That slot was just reserved. Choose another time.'
+        : backendMessage === 'All controller units are booked for this time slot'
+          ? 'All controller units are booked for this slot. Choose another time.'
+          : backendMessage === 'Time slots are currently available only for controller rigs'
+            ? 'Time slots are available only for controller rigs.'
         : backendMessage === 'Equipment is unavailable'
           ? 'This equipment is not available. Refresh and choose another rig.'
           : backendMessage === 'Booking date is outside the allowed window'

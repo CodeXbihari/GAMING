@@ -27,6 +27,7 @@ export const DateTimeSelection = () => {
   const [serverCancelledSlots, setServerCancelledSlots] = useState([]);
   const [availabilityLoading, setAvailabilityLoading] = useState(true);
   const [availabilityError, setAvailabilityError] = useState(false);
+  const isControllerSelected = String(selectedEquipment?.type || selectedEquipment?.category || '').toLowerCase() === 'controller';
 
   useEffect(() => {
     const timer = window.setInterval(() => setClockNow(new Date()), 30_000);
@@ -35,6 +36,14 @@ export const DateTimeSelection = () => {
 
   useEffect(() => {
     let active = true;
+    if (!isControllerSelected) {
+      setAvailabilityLoading(false);
+      setAvailabilityError(false);
+      setServerSlots(null);
+      setServerBookedSlots([]);
+      setServerCancelledSlots([]);
+      return () => { active = false; };
+    }
     setAvailabilityLoading(true);
     setAvailabilityError(false);
     setServerSlots(null);
@@ -66,7 +75,7 @@ export const DateTimeSelection = () => {
     refreshAvailability(true);
     const refreshTimer = window.setInterval(() => refreshAvailability(false), 15_000);
     return () => { active = false; window.clearInterval(refreshTimer); };
-  }, [selectedEquipment?.id, selectedDateISO]);
+  }, [selectedEquipment?.id, selectedDateISO, isControllerSelected]);
 
   const viewYear = viewDate.getFullYear();
   const viewMonth = viewDate.getMonth();
@@ -195,6 +204,10 @@ export const DateTimeSelection = () => {
   };
 
   const handleContinue = () => {
+    if (!isControllerSelected) {
+      addToast('Time slots are available only when you select a controller rig.', 'warning');
+      return;
+    }
     if (availabilityLoading) {
       addToast('Checking live slot availability. Please wait a moment.', 'warning');
       return;
@@ -351,6 +364,12 @@ export const DateTimeSelection = () => {
             </span>
           </div>
 
+          {!isControllerSelected && (
+            <div className="mb-4 rounded-xl border border-amber-400/25 bg-amber-400/[0.06] px-3 py-2 text-[10px] font-mono text-amber-200">
+              SELECT A CONTROLLER RIG TO UNLOCK TIME SLOTS. LAPTOP AND COMBO BOOKINGS ARE DISABLED.
+            </div>
+          )}
+
           {/* Slot Grid (dynamic rows of 3 columns) */}
           <div className="grid grid-cols-3 gap-3">
             {availableSlots.map((slotConfig) => {
@@ -360,7 +379,7 @@ export const DateTimeSelection = () => {
               const isBooked = (isSlotBooked && isSlotBooked(selectedEquipment?.id, selectedDateISO, slot))
                 || serverBookedSlots.includes(slot);
               const hasPassed = isSlotPast(slot);
-              const isUnavailable = isCancelled || isBooked || hasPassed || availabilityLoading || availabilityError;
+              const isUnavailable = !isControllerSelected || isCancelled || isBooked || hasPassed || availabilityLoading || availabilityError;
               const isSelected = selectedSlot === slot && !isUnavailable;
 
               return (
@@ -381,6 +400,8 @@ export const DateTimeSelection = () => {
                     <span className="text-[8px] text-amber-300 font-bold uppercase tracking-wider">CANCELLED BY ADMIN</span>
                   ) : isBooked ? (
                     <span className="text-[8px] text-[#FF453A] font-bold uppercase tracking-wider">BOOKED</span>
+                  ) : !isControllerSelected ? (
+                    <span className="text-[8px] text-amber-200/70 font-bold uppercase tracking-wider">CONTROLLER ONLY</span>
                   ) : hasPassed ? (
                     <span className="text-[8px] text-[#687366] font-bold uppercase tracking-wider">PASSED</span>
                   ) : availabilityLoading ? (
@@ -443,7 +464,8 @@ export const DateTimeSelection = () => {
         {/* Continue Button */}
         <button
           onClick={handleContinue}
-          className="w-full lg:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-full bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-mono font-black text-xs tracking-wider uppercase shadow-lime-sm hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
+          disabled={!isControllerSelected || availabilityLoading || availabilityError || !selectedSlot || serverBookedSlots.includes(selectedSlot) || serverCancelledSlots.includes(selectedSlot)}
+          className="w-full lg:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-full bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-mono font-black text-xs tracking-wider uppercase shadow-lime-sm hover:scale-[1.02] active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
         >
           <span>PROCEED TO PAYMENT</span>
           <ArrowRight className="w-4 h-4 stroke-[3]" />
