@@ -3,11 +3,23 @@ import { useApp } from '../../context/AppContext';
 import { Plus, Edit2, Trash2, X, Gamepad2, Crosshair, Wrench, Check, Upload, Image as ImageIcon, Link, Sparkles, RefreshCw } from 'lucide-react';
 import { EquipmentVisual } from '../../components/EquipmentVisual';
 
+const createAssetCode = (items = []) => {
+  const existingCodes = new Set(items.map((item) => String(item.assetCode || '').toUpperCase()));
+  let code;
+  do {
+    const randomPart = globalThis.crypto?.randomUUID?.().replaceAll('-', '').slice(0, 10)
+      || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    code = `EQP-${randomPart.toUpperCase()}`;
+  } while (existingCodes.has(code));
+  return code;
+};
+
 export const AdminEquipment = () => {
   const { equipmentList, addEquipment, updateEquipment, deleteEquipment, addToast } = useApp();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [photoMode, setPhotoMode] = useState('upload'); // 'upload' | 'url' | 'presets'
+  const [saving, setSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -24,6 +36,7 @@ export const AdminEquipment = () => {
   const PRESETS = [
     { label: 'ASUS TUF Laptop', url: '/images/laptop-hero.jpg', type: 'laptop', badge: 'RYZEN 7 7435HS + RTX 3050' },
     { label: 'EvoFox Controller', url: '/images/controller-hero.jpg', type: 'controller', badge: '2.4GHz HYPERCONNECT' },
+    { label: 'Neon EvoFox Controller', url: '/images/controller-evofox-neon.png', type: 'controller', badge: 'WIRELESS • NEON DOCK' },
     { label: 'Battle Station Combo', url: '/images/combo-setup.jpg', type: 'combo', badge: 'TUF LAPTOP + 2x EVOFOX' }
   ];
 
@@ -32,7 +45,7 @@ export const AdminEquipment = () => {
     setPhotoMode('upload');
     setFormData({
       name: '',
-      assetCode: `EQP-${Math.floor(100 + Math.random() * 900)}`,
+      assetCode: createAssetCode(equipmentList),
       type: 'laptop',
       price: 50,
       status: 'Available',
@@ -93,6 +106,7 @@ export const AdminEquipment = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (saving) return;
     if (!formData.name.trim()) {
       addToast('Please enter an equipment name.', 'warning');
       return;
@@ -105,10 +119,15 @@ export const AdminEquipment = () => {
       )
     };
 
-    const saved = editingItem
-      ? await updateEquipment(editingItem.id, payload)
-      : await addEquipment(payload);
-    if (saved) setModalOpen(false);
+    setSaving(true);
+    try {
+      const saved = editingItem
+        ? await updateEquipment(editingItem.id, payload)
+        : await addEquipment(payload);
+      if (saved) setModalOpen(false);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -544,9 +563,10 @@ export const AdminEquipment = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-3 rounded-full bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-black shadow-lime-sm transition-all cursor-pointer uppercase tracking-wider"
+                  disabled={saving}
+                  className="px-6 py-3 rounded-full bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-black shadow-lime-sm transition-all cursor-pointer uppercase tracking-wider disabled:opacity-60 disabled:cursor-wait"
                 >
-                  SAVE & SYNC TO CUSTOMER UI
+                  {saving ? 'SAVING RIG…' : 'SAVE & SYNC TO CUSTOMER UI'}
                 </button>
               </div>
 

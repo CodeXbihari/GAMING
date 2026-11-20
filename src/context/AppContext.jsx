@@ -837,8 +837,22 @@ export const AppProvider = ({ children }) => {
         .single();
 
       if (error) {
-        console.error('Supabase equipment insert failed:', error.code ?? 'unknown');
-        addToast('Could not save the equipment. Check your connection and admin access.', 'error');
+        console.error('Supabase equipment insert failed:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        const message = error.code === '42501'
+          ? 'Admin access expired. Sign out and sign in again before adding a rig.'
+          : error.code === '23505'
+            ? 'That asset code is already in use. Enter a unique asset code and retry.'
+            : error.code === '23514'
+              ? 'The category or status is not supported. Choose Laptop, Controller, or Combo and Available or Maintenance.'
+              : error.code?.startsWith('PGRST')
+                ? 'The equipment database schema is out of date. Refresh the page and contact the administrator if it continues.'
+                : `Could not save the rig: ${error.message || 'database request failed'}`;
+        addToast(message, 'error');
         return false;
       }
 
