@@ -32,7 +32,7 @@ export const HomePage = () => {
       title: 'ASUS TUF GAMING LAPTOP',
       subtitle: 'AMD Ryzen 7 7435HS • RTX 3050 4GB GPU • 144Hz FHD',
       code: 'TUF_RYZEN7_7435HS',
-      price: '₹60',
+      price: '₹65',
       period: '/hr',
       image: '/images/laptop-inspect-neon.png',
       badge: 'AMD RYZEN 7 7435HS • RTX 3050 4GB',
@@ -55,7 +55,7 @@ export const HomePage = () => {
       title: 'EVOFOX ELITE OPS WIRELESS',
       subtitle: 'EvoFox Elite Ops Wireless Gamepad • Hyperconnect™ 2.4GHz',
       code: 'EVOFOX_HYPERCONNECT',
-      price: '₹30',
+      price: '₹40',
       period: '/hr',
       image: '/images/controller-inspect-neon.png',
       badge: 'EVOFOX ELITE OPS • 2.4GHz HYPERCONNECT',
@@ -65,7 +65,7 @@ export const HomePage = () => {
         { label: 'Haptics', value: 'Dual Rumble Motors' },
         { label: 'Grip', value: 'Textured Handles' },
         { label: 'Combo Match', value: '2x same gamepads in Combo' },
-        { label: 'Standalone Rate', value: '₹30 per hour' },
+        { label: 'Standalone Rate', value: '₹40 per hour' },
       ],
       nodes: [
         { title: 'Hyperconnect™ 2.4GHz', desc: 'Ultra-low latency wireless dongle', top: '22%', left: '10%' },
@@ -78,7 +78,7 @@ export const HomePage = () => {
       title: 'FULL BATTLE STATION COMBO',
       subtitle: 'ASUS TUF Laptop + 2x EvoFox Wireless Gamepads',
       code: 'TUF_DUAL_COMBO',
-      price: '₹90',
+      price: '₹110',
       period: '/hr',
       image: '/images/combo-inspect-battle-station.png',
       badge: 'TUF LAPTOP + 2x EVOFOX GAMEPADS',
@@ -203,9 +203,9 @@ export const HomePage = () => {
                 <ArrowUpRight className="w-6 h-6 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
               </button>
 
-              <div className="hidden sm:flex flex-col text-left pl-2">
-                <span className="text-xs font-mono font-bold text-[#F5F7F2]">RATES FROM ₹30/HR</span>
-                <span className="text-[11px] text-[#9EA79C]">Instant UPI QR & Cash</span>
+              <div className="flex basis-full flex-col items-center text-center pt-1 sm:basis-auto sm:items-start sm:text-left sm:pt-0 sm:pl-2">
+                <span className="text-[11px] sm:text-xs font-mono font-bold text-[#F5F7F2]">RATES FROM ₹40/HR</span>
+                <span className="text-[10px] sm:text-[11px] text-[#9EA79C]">Instant UPI QR &amp; Cash</span>
               </div>
             </div>
 
@@ -348,7 +348,7 @@ export const HomePage = () => {
                     : 'text-[#9EA79C] hover:text-[#F5F7F2]'
                 }`}
               >
-                RTX Laptop (₹60/h)
+                RTX Laptop (₹65/h)
               </button>
 
               <button
@@ -359,7 +359,7 @@ export const HomePage = () => {
                     : 'text-[#9EA79C] hover:text-[#F5F7F2]'
                 }`}
               >
-                Controller (₹30/h)
+                Controller (₹40/h)
               </button>
 
               <button
@@ -370,7 +370,7 @@ export const HomePage = () => {
                     : 'text-[#9EA79C] hover:text-[#F5F7F2]'
                 }`}
               >
-                Combo (₹90/h)
+                Combo (₹110/h)
               </button>
             </div>
           </div>
@@ -484,7 +484,7 @@ export const HomePage = () => {
                 </span>
                 <h4 className="text-base font-extrabold text-[#F5F7F2]">Select Gear on Stone Podium</h4>
                 <p className="text-xs text-[#9EA79C] mt-1 leading-relaxed">
-                  Choose between the ASUS TUF Gaming Laptop with Ryzen 7 7435HS & RTX 3050 4GB (₹60/hr), EvoFox Elite Ops Wireless Gamepad (₹30/hr), or the bundled Laptop + 2 Controllers Combo (₹90/hr).
+                  Choose between the ASUS TUF Gaming Laptop with Ryzen 7 7435HS & RTX 3050 4GB (₹65/hr), EvoFox Elite Ops Wireless Gamepad (₹40/hr), or the bundled Laptop + 2 Controllers Combo (₹110/hr).
                 </p>
               </div>
 
