@@ -143,6 +143,8 @@ export const EquipmentSelection = () => {
                     <img 
                       src="/images/stone-pedestal.jpg" 
                       alt="Stone slab" 
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover object-bottom filter contrast-125 brightness-75 mix-blend-luminosity" 
                     />
                     <div className="absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#C6FF00] to-transparent shadow-[0_0_10px_#C6FF00]" />
@@ -155,18 +157,24 @@ export const EquipmentSelection = () => {
                       <img 
                         src="/images/laptop-hero.jpg" 
                         alt="ASUS TUF Gaming Laptop" 
+                        loading="lazy"
+                        decoding="async"
                         className="w-[58%] h-auto max-h-28 object-contain -translate-y-2 filter contrast-110 brightness-105 group-hover:scale-105 transition-transform duration-500" 
                       />
                       {/* Controller 1 in foreground left */}
                       <img 
                         src="/images/controller-hero.jpg" 
                         alt="EvoFox Elite Ops Wireless Gamepad 1" 
+                        loading="lazy"
+                        decoding="async"
                         className="w-[32%] h-auto max-h-20 object-contain -translate-x-7 translate-y-3 z-30 drop-shadow-[0_12px_24px_rgba(0,0,0,0.95)] group-hover:scale-105 transition-transform duration-500 -rotate-6" 
                       />
                       {/* Controller 2 in foreground right */}
                       <img 
                         src="/images/controller-hero.jpg" 
                         alt="EvoFox Elite Ops Wireless Gamepad 2" 
+                        loading="lazy"
+                        decoding="async"
                         className="w-[32%] h-auto max-h-20 object-contain translate-x-7 translate-y-3 z-30 drop-shadow-[0_12px_24px_rgba(0,0,0,0.95)] group-hover:scale-105 transition-transform duration-500 rotate-6" 
                       />
                     </div>
@@ -174,6 +182,8 @@ export const EquipmentSelection = () => {
                     <img 
                       src={card.image} 
                       alt={card.name} 
+                      loading="lazy"
+                      decoding="async"
                       className="w-[85%] h-auto max-h-36 object-contain z-20 filter contrast-110 brightness-105 group-hover:scale-105 transition-transform duration-500" 
                     />
                   )}

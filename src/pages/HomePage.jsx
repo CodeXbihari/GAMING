@@ -34,7 +34,7 @@ export const HomePage = () => {
       code: 'TUF_RYZEN7_7435HS',
       price: '₹65',
       period: '/hr',
-      image: '/images/laptop-inspect-neon.png',
+      image: '/images/laptop-inspect-neon.jpg',
       badge: 'AMD RYZEN 7 7435HS • RTX 3050 4GB',
       specs: [
         { label: 'Display', value: '144Hz Full HD IPS' },
@@ -57,7 +57,7 @@ export const HomePage = () => {
       code: 'EVOFOX_HYPERCONNECT',
       price: '₹40',
       period: '/hr',
-      image: '/images/controller-inspect-neon.png',
+      image: '/images/controller-inspect-neon.jpg',
       badge: 'EVOFOX ELITE OPS • 2.4GHz HYPERCONNECT',
       specs: [
         { label: 'Gamepad', value: 'EvoFox Elite Ops Wireless' },
@@ -139,7 +139,7 @@ export const HomePage = () => {
       {/* ========================================================================= */}
       <section className="hero-cinematic">
         <img
-          src="/images/hero-neon-hardware.png"
+          src="/images/hero-neon-hardware.jpg"
           alt="ASUS TUF laptop and EvoFox gamepads on neon-lit volcanic stone"
           className="hero-cinematic-art"
           fetchPriority="high"

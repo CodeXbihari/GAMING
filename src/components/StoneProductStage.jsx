@@ -5,7 +5,7 @@ export const StoneProductStage = ({ onBook, useHeroBackground = false }) => (
     <div className="relative aspect-[16/11] sm:aspect-[16/10] w-full">
       {!useHeroBackground && (
         <img
-          src="/images/hero-neon-hardware.png"
+          src="/images/hero-neon-hardware.jpg"
           alt="ASUS TUF laptop and two EvoFox gamepads on cracked volcanic stone with neon lime lighting and smoke"
           className="absolute inset-0 w-full h-full object-contain pointer-events-none"
           fetchPriority="high"

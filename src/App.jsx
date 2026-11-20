@@ -19,6 +19,9 @@ import { ArrowLeft } from 'lucide-react';
 const MainContent = () => {
   const {
     currentPage,
+    equipmentLoading,
+    equipmentLoadError,
+    refreshEquipment,
     adminSubPage,
     setAdminSubPage,
     authSession,
@@ -29,6 +32,33 @@ const MainContent = () => {
     signOutAdmin,
     setCurrentPage
   } = useApp();
+
+  if (equipmentLoading) {
+    return (
+      <main className="min-h-screen bg-[#080A08] flex flex-col items-center justify-center gap-4 text-xs font-mono text-[#9EA79C]">
+        <span className="w-8 h-8 rounded-full border-2 border-[#C6FF00]/25 border-t-[#C6FF00] animate-spin" aria-hidden="true" />
+        <span>SYNCING_LIVE_INVENTORY...</span>
+        <ToastContainer />
+      </main>
+    );
+  }
+
+  if (equipmentLoadError) {
+    return (
+      <main className="min-h-screen bg-[#080A08] flex flex-col items-center justify-center gap-4 px-5 text-center text-xs font-mono text-[#9EA79C]">
+        <span className="text-[#F5F7F2]">{equipmentLoadError}</span>
+        <p className="max-w-md">The site is holding the cached photos back so an older inventory image is not shown as current.</p>
+        <button
+          type="button"
+          onClick={refreshEquipment}
+          className="px-5 py-3 rounded-full bg-[#C6FF00] text-[#080A08] font-black tracking-wider"
+        >
+          RETRY INVENTORY SYNC
+        </button>
+        <ToastContainer />
+      </main>
+    );
+  }
 
   const handleBack = () => {
     if (currentPage === 'admin') {

@@ -87,6 +87,12 @@ const INITIAL_TIME_SLOTS = [
 const CUSTOMER_PAGES = new Set(['home', 'equipment', 'datetime', 'checkout', 'confirmation', 'bookings']);
 const APP_PAGES = new Set([...CUSTOMER_PAGES, 'admin']);
 const ADMIN_PAGES = new Set(['dashboard', 'equipment', 'bookings', 'payments', 'timeslots', 'students', 'reports', 'settings']);
+const OPTIMIZED_IMAGE_PATHS = {
+  '/images/hero-neon-hardware.png': '/images/hero-neon-hardware.jpg',
+  '/images/controller-evofox-neon.png': '/images/controller-evofox-neon.jpg',
+  '/images/controller-inspect-neon.png': '/images/controller-inspect-neon.jpg',
+  '/images/laptop-inspect-neon.png': '/images/laptop-inspect-neon.jpg'
+};
 
 const getStoredPage = (key, validPages, fallback) => {
   try {
@@ -211,6 +217,8 @@ export const AppProvider = ({ children }) => {
     } catch (e) {}
     return INITIAL_EQUIPMENT;
   });
+  const [equipmentLoading, setEquipmentLoading] = useState(true);
+  const [equipmentLoadError, setEquipmentLoadError] = useState('');
   const [bookings, setBookings] = useState(() => {
     try {
       const saved = sessionStorage.getItem('hostel_guest_bookings');
@@ -222,10 +230,14 @@ export const AppProvider = ({ children }) => {
   });
   const [timeSlots, setTimeSlots] = useState(INITIAL_TIME_SLOTS);
 
-  // Sync equipment list to local storage so newly added equipment with photos persists immediately
+  // Cache inventory metadata locally, but keep large uploaded data URLs in Supabase only.
   useEffect(() => {
     try {
-      localStorage.setItem('hostel_equipment_fleet', JSON.stringify(equipmentList));
+      const cachedEquipment = equipmentList.map((item) => ({
+        ...item,
+        image: typeof item.image === 'string' && item.image.startsWith('data:') ? '' : item.image
+      }));
+      localStorage.setItem('hostel_equipment_fleet', JSON.stringify(cachedEquipment));
     } catch (e) {}
   }, [equipmentList]);
 
@@ -350,7 +362,10 @@ export const AppProvider = ({ children }) => {
       price: Number(item.price_per_hour || item.price || defaultPrice),
       status: normalizedStatus,
       inventoryCount: item.inventory_count || item.inventoryCount || 1,
-      image: item.image || item.image_url || item.imageUrl || defaultImage,
+      image: (() => {
+        const imagePath = item.image || item.image_url || item.imageUrl || defaultImage;
+        return OPTIMIZED_IMAGE_PATHS[imagePath] || imagePath;
+      })(),
       badge: item.badge || (normalizedStatus === 'Maintenance' ? 'MAINTENANCE' : (isCombo ? 'TUF LAPTOP + 2x EVOFOX' : isLaptop ? 'RYZEN 7 7435HS + RTX 3050' : '2.4GHz HYPERCONNECT')),
       description: item.description || (isCombo
         ? 'Full Battle Station • ASUS TUF Laptop + 2x EvoFox Gamepads on Stone Dock'
@@ -402,19 +417,29 @@ export const AppProvider = ({ children }) => {
 
   // ---------- Data Fetching ----------
   const fetchEquipment = useCallback(async () => {
+    setEquipmentLoading(true);
+    setEquipmentLoadError('');
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10_000);
     try {
       const { data, error } = await supabase
         .from('equipment')
         .select('*')
-        .order('name');
+        .order('name')
+        .abortSignal(controller.signal);
       if (error) {
         console.error('Supabase equipment fetch error:', error);
-      } else if (data && data.length) {
+        setEquipmentLoadError('Could not sync the latest equipment and photos.');
+      } else if (Array.isArray(data)) {
         const normalized = data.map(normalizeEquipment);
         setEquipmentList(normalized);
       }
     } catch (e) {
       console.error('fetchEquipment exception:', e);
+      setEquipmentLoadError('Could not sync the latest equipment and photos.');
+    } finally {
+      window.clearTimeout(timeout);
+      setEquipmentLoading(false);
     }
   }, []);
 
@@ -1015,6 +1040,9 @@ export const AppProvider = ({ children }) => {
         latestBooking,
         setLatestBooking,
         equipmentList,
+        equipmentLoading,
+        equipmentLoadError,
+        refreshEquipment: fetchEquipment,
         bookings,
         timeSlots,
         activeTimeSlotLabels,

@@ -36,7 +36,7 @@ export const AdminEquipment = () => {
   const PRESETS = [
     { label: 'ASUS TUF Laptop', url: '/images/laptop-hero.jpg', type: 'laptop', badge: 'RYZEN 7 7435HS + RTX 3050' },
     { label: 'EvoFox Controller', url: '/images/controller-hero.jpg', type: 'controller', badge: '2.4GHz HYPERCONNECT' },
-    { label: 'Neon EvoFox Controller', url: '/images/controller-evofox-neon.png', type: 'controller', badge: 'WIRELESS • NEON DOCK' },
+    { label: 'Neon EvoFox Controller', url: '/images/controller-evofox-neon.jpg', type: 'controller', badge: 'WIRELESS • NEON DOCK' },
     { label: 'Battle Station Combo', url: '/images/combo-setup.jpg', type: 'combo', badge: 'TUF LAPTOP + 2x EVOFOX' }
   ];
 
@@ -74,7 +74,7 @@ export const AdminEquipment = () => {
     setModalOpen(true);
   };
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -83,15 +83,39 @@ export const AdminEquipment = () => {
       return;
     }
 
+    let optimizedFile = file;
+    try {
+      if (typeof createImageBitmap === 'function') {
+        const bitmap = await createImageBitmap(file);
+        const maxDimension = 1400;
+        const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        const context = canvas.getContext('2d');
+        context?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close?.();
+        const compressed = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.82));
+        if (compressed && compressed.size < file.size) {
+          optimizedFile = new File([compressed], `${file.name.replace(/\.[^.]+$/, '')}.webp`, {
+            type: 'image/webp',
+            lastModified: Date.now()
+          });
+        }
+      }
+    } catch (error) {
+      console.warn('Could not optimize uploaded equipment photo; using original file.');
+    }
+
     const reader = new FileReader();
     reader.onload = (event) => {
       setFormData(prev => ({
         ...prev,
         image: event.target?.result
       }));
-      addToast('Hardware photo uploaded and staged for preview!', 'success');
+      addToast(optimizedFile !== file ? 'Photo optimized and staged for preview.' : 'Hardware photo uploaded and staged for preview!', 'success');
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(optimizedFile);
   };
 
   const handleSelectPreset = (preset) => {
@@ -192,6 +216,8 @@ export const AdminEquipment = () => {
                           <img 
                             src={itemPhoto} 
                             alt={item.name} 
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-contain z-10 filter contrast-110 brightness-105 group-hover:scale-110 transition-transform duration-300" 
                           />
                         ) : (
