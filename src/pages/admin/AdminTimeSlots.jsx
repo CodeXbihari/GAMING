@@ -220,12 +220,12 @@ export const AdminTimeSlots = () => {
                       </button>
                       <button
                         onClick={() => {
-                          if (confirm(`Cancel time slot "${slot.label}"? Students will see it as unavailable, and you can re-enable it later.`)) {
+                          if (confirm(`Delete time slot "${slot.label}" from the schedule? Existing reservations will remain in booking history.`)) {
                             deleteTimeSlot(slot.id);
                           }
                         }}
                         className="p-2 rounded-xl text-[#9EA79C] hover:text-[#FF453A] bg-[#171D18] hover:bg-[#220F12] transition-colors cursor-pointer"
-                        title="Cancel Slot"
+                        title="Delete Slot"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

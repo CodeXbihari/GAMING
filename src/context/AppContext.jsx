@@ -516,26 +516,24 @@ export const AppProvider = ({ children }) => {
     try {
       const { data, error } = await supabase
         .from('time_slots')
-        .update({ is_active: false })
+        .delete()
         .eq('id', id)
-        .select('id, label, is_active')
+        .select('id, label')
         .single();
 
       if (error) {
-        console.warn('Supabase cancel time slot failed:', error.message);
-        addToast(`Could not cancel time slot: ${error.message}`, 'error');
+        console.warn('Supabase delete time_slots failed:', error.message);
+        addToast(`Could not delete time slot: ${error.message}`, 'error');
         return false;
       }
 
-      const cancelledSlot = data || timeSlots.find((slot) => slot.id === id);
-      setTimeSlots((prev) => prev.map((slot) => (
-        slot.id === id ? { ...slot, isActive: false } : slot
-      )));
-      addToast(`Time slot "${cancelledSlot?.label || ''}" cancelled. Students will see it as unavailable.`, 'success');
+      const deletedSlot = data || timeSlots.find((slot) => slot.id === id);
+      setTimeSlots((prev) => prev.filter((slot) => slot.id !== id));
+      addToast(`Time slot "${deletedSlot?.label || ''}" deleted.`, 'success');
       return true;
     } catch (e) {
-      console.warn('cancelTimeSlot exception:', e);
-      addToast('Could not cancel the time slot. Check your connection and admin access.', 'error');
+      console.warn('deleteTimeSlot exception:', e);
+      addToast('Could not delete the time slot. Check your connection and admin access.', 'error');
       return false;
     }
   };
