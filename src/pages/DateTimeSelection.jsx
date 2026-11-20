@@ -24,10 +24,11 @@ export const DateTimeSelection = () => {
   const [viewDate, setViewDate] = useState(() => new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
   const [serverSlots, setServerSlots] = useState(null);
   const [serverBookedSlots, setServerBookedSlots] = useState([]);
+  const [serverComboBlockedSlots, setServerComboBlockedSlots] = useState([]);
   const [serverCancelledSlots, setServerCancelledSlots] = useState([]);
   const [availabilityLoading, setAvailabilityLoading] = useState(true);
   const [availabilityError, setAvailabilityError] = useState(false);
-  const isControllerSelected = String(selectedEquipment?.type || selectedEquipment?.category || '').toLowerCase() === 'controller';
+  const isComboSelected = String(selectedEquipment?.type || selectedEquipment?.category || '').toLowerCase() === 'combo';
 
   useEffect(() => {
     const timer = window.setInterval(() => setClockNow(new Date()), 30_000);
@@ -36,18 +37,11 @@ export const DateTimeSelection = () => {
 
   useEffect(() => {
     let active = true;
-    if (!isControllerSelected) {
-      setAvailabilityLoading(false);
-      setAvailabilityError(false);
-      setServerSlots(null);
-      setServerBookedSlots([]);
-      setServerCancelledSlots([]);
-      return () => { active = false; };
-    }
     setAvailabilityLoading(true);
     setAvailabilityError(false);
     setServerSlots(null);
     setServerBookedSlots([]);
+    setServerComboBlockedSlots([]);
     setServerCancelledSlots([]);
 
     const refreshAvailability = async (initial = false) => {
@@ -64,6 +58,7 @@ export const DateTimeSelection = () => {
         setAvailabilityError(false);
         setServerSlots(data.slots);
         setServerBookedSlots(data.unavailable_slots);
+        setServerComboBlockedSlots(Array.isArray(data.combo_blocked_slots) ? data.combo_blocked_slots : []);
         setServerCancelledSlots(Array.isArray(data.cancelled_slots) ? data.cancelled_slots : []);
       } catch {
         if (active) setAvailabilityError(true);
@@ -75,7 +70,7 @@ export const DateTimeSelection = () => {
     refreshAvailability(true);
     const refreshTimer = window.setInterval(() => refreshAvailability(false), 15_000);
     return () => { active = false; window.clearInterval(refreshTimer); };
-  }, [selectedEquipment?.id, selectedDateISO, isControllerSelected]);
+  }, [selectedEquipment?.id, selectedDateISO]);
 
   const viewYear = viewDate.getFullYear();
   const viewMonth = viewDate.getMonth();
@@ -204,10 +199,6 @@ export const DateTimeSelection = () => {
   };
 
   const handleContinue = () => {
-    if (!isControllerSelected) {
-      addToast('Time slots are available only when you select a controller rig.', 'warning');
-      return;
-    }
     if (availabilityLoading) {
       addToast('Checking live slot availability. Please wait a moment.', 'warning');
       return;
@@ -222,6 +213,10 @@ export const DateTimeSelection = () => {
     }
     if (isSlotBooked && isSlotBooked(selectedEquipment?.id, selectedDateISO, selectedSlot)) {
       addToast('Selected slot is already reserved. Please pick another slot.', 'warning');
+      return;
+    }
+    if (isComboSelected && serverComboBlockedSlots.includes(selectedSlot)) {
+      addToast('Another equipment is booked for this time. Choose a different slot for the combo.', 'warning');
       return;
     }
     if (availabilityError) {
@@ -364,12 +359,6 @@ export const DateTimeSelection = () => {
             </span>
           </div>
 
-          {!isControllerSelected && (
-            <div className="mb-4 rounded-xl border border-amber-400/25 bg-amber-400/[0.06] px-3 py-2 text-[10px] font-mono text-amber-200">
-              SELECT A CONTROLLER RIG TO UNLOCK TIME SLOTS. LAPTOP AND COMBO BOOKINGS ARE DISABLED.
-            </div>
-          )}
-
           {/* Slot Grid (dynamic rows of 3 columns) */}
           <div className="grid grid-cols-3 gap-3">
             {availableSlots.map((slotConfig) => {
@@ -378,8 +367,9 @@ export const DateTimeSelection = () => {
                 || serverCancelledSlots.includes(slot);
               const isBooked = (isSlotBooked && isSlotBooked(selectedEquipment?.id, selectedDateISO, slot))
                 || serverBookedSlots.includes(slot);
+              const isComboBlocked = isComboSelected && serverComboBlockedSlots.includes(slot);
               const hasPassed = isSlotPast(slot);
-              const isUnavailable = !isControllerSelected || isCancelled || isBooked || hasPassed || availabilityLoading || availabilityError;
+              const isUnavailable = isCancelled || isBooked || isComboBlocked || hasPassed || availabilityLoading || availabilityError;
               const isSelected = selectedSlot === slot && !isUnavailable;
 
               return (
@@ -400,8 +390,8 @@ export const DateTimeSelection = () => {
                     <span className="text-[8px] text-amber-300 font-bold uppercase tracking-wider">CANCELLED BY ADMIN</span>
                   ) : isBooked ? (
                     <span className="text-[8px] text-[#FF453A] font-bold uppercase tracking-wider">BOOKED</span>
-                  ) : !isControllerSelected ? (
-                    <span className="text-[8px] text-amber-200/70 font-bold uppercase tracking-wider">CONTROLLER ONLY</span>
+                  ) : isComboBlocked ? (
+                    <span className="text-[8px] text-[#FF453A] font-bold uppercase tracking-wider">COMBO UNAVAILABLE</span>
                   ) : hasPassed ? (
                     <span className="text-[8px] text-[#687366] font-bold uppercase tracking-wider">PASSED</span>
                   ) : availabilityLoading ? (
@@ -464,7 +454,7 @@ export const DateTimeSelection = () => {
         {/* Continue Button */}
         <button
           onClick={handleContinue}
-          disabled={!isControllerSelected || availabilityLoading || availabilityError || !selectedSlot || serverBookedSlots.includes(selectedSlot) || serverCancelledSlots.includes(selectedSlot)}
+          disabled={availabilityLoading || availabilityError || !selectedSlot || isSlotPast(selectedSlot) || (isSlotBooked && isSlotBooked(selectedEquipment?.id, selectedDateISO, selectedSlot)) || serverBookedSlots.includes(selectedSlot) || (isComboSelected && serverComboBlockedSlots.includes(selectedSlot)) || serverCancelledSlots.includes(selectedSlot)}
           className="w-full lg:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-full bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-mono font-black text-xs tracking-wider uppercase shadow-lime-sm hover:scale-[1.02] active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
         >
           <span>PROCEED TO PAYMENT</span>

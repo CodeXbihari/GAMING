@@ -149,46 +149,44 @@ Deno.serve(async (req) => {
     if (String(equipment.status ?? '').toLowerCase() !== 'available') {
       return jsonResponse({ error: 'Equipment is unavailable' }, 409);
     }
-    if (String(equipment.category ?? equipment.type ?? '').toLowerCase() !== 'controller') {
-      return jsonResponse({ error: 'Time slots are currently available only for controller rigs' }, 409);
-    }
+    const selectedCategory = String(equipment.category ?? equipment.type ?? '').toLowerCase();
     const price = Number(equipment.price_per_hour ?? equipment.price);
     if (!Number.isFinite(price) || price < 0) {
       console.error('Equipment has an invalid configured price');
       return jsonResponse({ error: 'Equipment price could not be verified' }, 503);
     }
 
-    const [{ data: controllerRigs, error: controllerRigsError }, { data: existingBookings, error: availabilityError }] = await Promise.all([
-      admin.from('equipment').select('id, inventory_count').eq('category', 'controller').eq('status', 'Available'),
-      admin
+    const { data: existingBookings, error: availabilityError } = await admin
       .from('bookings')
       .select('id, equipment_id, slot, start_time, end_time')
       .eq('booking_date', dateISO)
       .in('booking_status', ['Confirmed', 'Pending Verification', 'Pending Payment', 'confirmed', 'pending_verification', 'pending_payment'])
-      .limit(500),
-    ]);
-    if (controllerRigsError || availabilityError) {
-      console.error('Could not check controller availability:', controllerRigsError?.code ?? availabilityError?.code ?? 'unknown');
+      .limit(500);
+    if (availabilityError) {
+      console.error('Could not check equipment availability:', availabilityError.code ?? 'unknown');
       return jsonResponse({
-        error: schemaError(controllerRigsError || availabilityError)
+        error: schemaError(availabilityError)
           ? 'Booking backend is out of date. Apply the Supabase migrations and redeploy the booking function.'
           : 'Could not check slot availability',
       }, 503);
     }
-    const controllerIds = new Set((controllerRigs ?? []).map((rig) => rig.id));
-    const matchingControllerBookings = (existingBookings ?? []).filter((booking) => (
-      controllerIds.has(booking.equipment_id)
-      && (booking.slot === slot || Boolean(
+    const overlapsSelectedSlot = (booking: { slot: string; start_time: string | null; end_time: string | null }) => (
+      booking.slot === slot || Boolean(
         booking.start_time && booking.end_time
         && configuredSlot.start_time < booking.end_time
         && configuredSlot.end_time > booking.start_time
-      ))
-    ));
-    const controllerCapacity = (controllerRigs ?? []).reduce((total, rig) => total + Math.max(1, Number(rig.inventory_count) || 1), 0);
+      )
+    );
     const selectedRigCapacity = Math.max(1, Number(equipment.inventory_count) || 1);
-    const selectedRigBookings = matchingControllerBookings.filter((booking) => booking.equipment_id === equipment.id).length;
-    if (matchingControllerBookings.length >= controllerCapacity || selectedRigBookings >= selectedRigCapacity) {
-      return jsonResponse({ error: 'All controller units are booked for this time slot' }, 409);
+    const matchingBookings = (existingBookings ?? []).filter(overlapsSelectedSlot);
+    const selectedRigBookings = matchingBookings.filter((booking) => booking.equipment_id === equipment.id).length;
+    if (selectedRigBookings >= selectedRigCapacity) {
+      return jsonResponse({ error: 'This equipment is fully booked for this time slot' }, 409);
+    }
+    if (selectedCategory === 'combo' && matchingBookings.some((booking) => (
+      booking.equipment_id !== equipment.id
+    ))) {
+      return jsonResponse({ error: 'A different equipment is booked for this time slot, so the combo is unavailable' }, 409);
     }
 
     const bookingAccessToken = randomHexToken();
