@@ -15,7 +15,7 @@ const createAssetCode = (items = []) => {
 };
 
 export const AdminEquipment = () => {
-  const { equipmentList, addEquipment, updateEquipment, deleteEquipment, addToast } = useApp();
+  const { equipmentList, equipmentLoading, equipmentLoadError, refreshEquipment, addEquipment, updateEquipment, deleteEquipment, addToast } = useApp();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [photoMode, setPhotoMode] = useState('upload'); // 'upload' | 'url' | 'presets'
@@ -169,6 +169,11 @@ export const AdminEquipment = () => {
           <p className="text-xs text-[#9EA79C] mt-1">
             Add new gaming hardware with live photos, calibrate stone docks, and synchronize fleet to the customer UI
           </p>
+          {equipmentLoadError && (
+            <button type="button" onClick={refreshEquipment} className="mt-3 text-xs font-bold text-amber-200 underline underline-offset-4">
+              Latest inventory could not sync. Retry.
+            </button>
+          )}
         </div>
 
         <button
@@ -212,7 +217,9 @@ export const AdminEquipment = () => {
                         />
                         <div className="absolute inset-x-0 bottom-0 h-[1px] bg-[#C6FF00]/50" />
                         
-                        {itemPhoto ? (
+                        {equipmentLoading || equipmentLoadError ? (
+                          <div className="z-10 h-9 w-12 rounded bg-white/[0.05] animate-pulse" aria-label="Loading current equipment photo" />
+                        ) : itemPhoto ? (
                           <img 
                             src={itemPhoto} 
                             alt={item.name} 

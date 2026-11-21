@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { ArrowRight, Sparkles, Check, Zap, Crosshair, Shield, Activity, Wrench } from 'lucide-react';
 
 export const EquipmentSelection = () => {
-  const { equipmentList, selectedEquipment, setSelectedEquipment, setCurrentPage, addToast } = useApp();
+  const { equipmentList, equipmentLoading, equipmentLoadError, refreshEquipment, selectedEquipment, setSelectedEquipment, setCurrentPage, addToast } = useApp();
 
   const handleSelect = (item) => {
     if (item.status === 'Maintenance') {
@@ -93,6 +93,13 @@ export const EquipmentSelection = () => {
         </div>
       </div>
 
+      {equipmentLoadError && (
+        <div className="-mt-6 mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/25 bg-amber-400/[0.06] px-4 py-3 text-xs font-mono text-amber-100">
+          <span>Latest inventory photos are unavailable right now.</span>
+          <button type="button" onClick={refreshEquipment} className="font-black text-[#C6FF00] underline underline-offset-4">RETRY</button>
+        </div>
+      )}
+
       {/* Dynamic Equipment Cards Grid with 3D Stone Staging */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 max-w-7xl mx-auto w-full items-stretch">
         {cards.map((card) => {
@@ -151,7 +158,9 @@ export const EquipmentSelection = () => {
                   </div>
 
                   {/* Hardware photo resting on the stone slab */}
-                  {card.type === 'combo' && card.image === '/images/combo-setup.jpg' ? (
+                  {equipmentLoading || equipmentLoadError ? (
+                    <div className="relative z-20 h-24 w-3/4 rounded-xl bg-white/[0.04] animate-pulse" aria-label="Loading current equipment photo" />
+                  ) : card.type === 'combo' && card.image === '/images/combo-setup.jpg' ? (
                     <div className="relative w-full h-full flex items-center justify-center z-20">
                       {/* Laptop in background */}
                       <img 
