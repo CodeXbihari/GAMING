@@ -229,6 +229,7 @@ export const AppProvider = ({ children }) => {
     }
   });
   const [timeSlots, setTimeSlots] = useState(INITIAL_TIME_SLOTS);
+  const [timeSlotOverrides, setTimeSlotOverrides] = useState([]);
 
   // Cache inventory metadata locally, but keep large uploaded data URLs in Supabase only.
   useEffect(() => {
@@ -334,7 +335,7 @@ export const AppProvider = ({ children }) => {
   // Active time slot labels (for backward compat with DateTimeSelection)
   const activeTimeSlotLabels = useMemo(() => {
     if (timeSlots.length > 0) {
-      return timeSlots.filter(s => s.isActive).sort((a, b) => a.sortOrder - b.sortOrder).map(s => s.label);
+      return timeSlots.filter(s => !s.bookingDate && s.isActive).sort((a, b) => a.sortOrder - b.sortOrder).map(s => s.label);
     }
     return DEFAULT_TIME_SLOTS;
   }, [timeSlots]);
@@ -412,7 +413,8 @@ export const AppProvider = ({ children }) => {
     startTime: row.start_time,
     endTime: row.end_time,
     isActive: row.is_active !== false,
-    sortOrder: row.sort_order || 0
+    sortOrder: row.sort_order || 0,
+    bookingDate: row.booking_date || null
   });
 
   // ---------- Data Fetching ----------
@@ -462,20 +464,66 @@ export const AppProvider = ({ children }) => {
 
   const fetchTimeSlots = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('time_slots')
-        .select('*')
-        .order('sort_order', { ascending: true });
-      if (error) {
-        console.error('Supabase time_slots fetch error:', error);
-        // Keep the existing schedule available if the backend is temporarily unreachable.
-      } else if (data) {
-        setTimeSlots(data.map(normalizeTimeSlot));
+      const [{ data: slots, error: slotsError }, { data: overrides, error: overridesError }] = await Promise.all([
+        supabase.from('time_slots').select('*').order('sort_order', { ascending: true }),
+        supabase.from('time_slot_schedules').select('booking_date')
+      ]);
+      if (slotsError || overridesError) {
+        console.error('Supabase time slot schedule fetch error:', slotsError?.message || overridesError?.message);
+        return false;
       }
+      if (slots) setTimeSlots(slots.map(normalizeTimeSlot));
+      if (overrides) setTimeSlotOverrides(overrides.map((item) => item.booking_date));
+      return true;
     } catch (e) {
       console.error('fetchTimeSlots exception:', e);
+      return false;
     }
   }, []);
+
+  const createTimeSlotOverride = async (bookingDate) => {
+    try {
+      const { error } = await supabase.rpc('create_time_slot_override', { target_date: bookingDate });
+      if (error) {
+        console.warn('Create time slot override failed:', error.message);
+        addToast('Could not customize this date. Check your admin access and try again.', 'error');
+        return false;
+      }
+      const refreshed = await fetchTimeSlots();
+      if (!refreshed) {
+        addToast('This date schedule was created, but could not be refreshed.', 'error');
+        return false;
+      }
+      addToast(`A separate schedule is now active for ${bookingDate}.`, 'success');
+      return true;
+    } catch (error) {
+      console.warn('Create time slot override request failed:', error instanceof Error ? error.message : 'unknown error');
+      addToast('Could not customize this date. Check your connection and try again.', 'error');
+      return false;
+    }
+  };
+
+  const resetTimeSlotOverride = async (bookingDate) => {
+    try {
+      const { error } = await supabase.rpc('reset_time_slot_override', { target_date: bookingDate });
+      if (error) {
+        console.warn('Reset time slot override failed:', error.message);
+        addToast('Could not restore the default schedule for this date.', 'error');
+        return false;
+      }
+      const refreshed = await fetchTimeSlots();
+      if (!refreshed) {
+        addToast('The default schedule was restored, but could not be refreshed.', 'error');
+        return false;
+      }
+      addToast(`The default schedule now applies to ${bookingDate}.`, 'success');
+      return true;
+    } catch (error) {
+      console.warn('Reset time slot override request failed:', error instanceof Error ? error.message : 'unknown error');
+      addToast('Could not restore the default schedule. Check your connection and try again.', 'error');
+      return false;
+    }
+  };
 
   useEffect(() => {
     fetchEquipment();
@@ -504,7 +552,8 @@ export const AppProvider = ({ children }) => {
       start_time: slotData.startTime || '09:00',
       end_time: slotData.endTime || '10:00',
       is_active: slotData.isActive !== false,
-      sort_order: slotData.sortOrder !== undefined ? Number(slotData.sortOrder) : (timeSlots.length + 1)
+      sort_order: slotData.sortOrder !== undefined ? Number(slotData.sortOrder) : (timeSlots.length + 1),
+      booking_date: slotData.bookingDate || null
     };
 
     try {
@@ -1045,6 +1094,7 @@ export const AppProvider = ({ children }) => {
         refreshEquipment: fetchEquipment,
         bookings,
         timeSlots,
+        timeSlotOverrides,
         activeTimeSlotLabels,
         user,
         setUser,
@@ -1066,6 +1116,8 @@ export const AppProvider = ({ children }) => {
         fetchEquipment,
         fetchTimeSlots,
         addTimeSlot,
+        createTimeSlotOverride,
+        resetTimeSlotOverride,
         updateTimeSlot,
         deleteTimeSlot,
         toggleTimeSlot

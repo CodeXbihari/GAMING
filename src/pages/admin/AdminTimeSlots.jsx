@@ -16,6 +16,9 @@ import {
 export const AdminTimeSlots = () => {
   const {
     timeSlots,
+    timeSlotOverrides,
+    createTimeSlotOverride,
+    resetTimeSlotOverride,
     addTimeSlot,
     updateTimeSlot,
     deleteTimeSlot,
@@ -25,6 +28,11 @@ export const AdminTimeSlots = () => {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  });
+  const [scheduleBusy, setScheduleBusy] = useState(false);
 
   const [formData, setFormData] = useState({
     label: '',
@@ -34,13 +42,17 @@ export const AdminTimeSlots = () => {
     isActive: true
   });
 
-  const totalSlots = timeSlots.length;
-  const activeSlotsCount = timeSlots.filter((s) => s.isActive).length;
+  const hasDateOverride = timeSlotOverrides.includes(selectedDate);
+  const visibleSlots = timeSlots
+    .filter((slot) => (hasDateOverride ? slot.bookingDate === selectedDate : !slot.bookingDate))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const totalSlots = visibleSlots.length;
+  const activeSlotsCount = visibleSlots.filter((s) => s.isActive).length;
   const inactiveSlotsCount = totalSlots - activeSlotsCount;
 
   const handleOpenAdd = () => {
     setEditingItem(null);
-    const nextOrder = timeSlots.length > 0 ? Math.max(...timeSlots.map((s) => s.sortOrder || 0)) + 1 : 1;
+    const nextOrder = visibleSlots.length > 0 ? Math.max(...visibleSlots.map((s) => s.sortOrder || 0)) + 1 : 1;
     setFormData({
       label: '06:00 PM',
       startTime: '18:00',
@@ -74,7 +86,7 @@ export const AdminTimeSlots = () => {
     if (editingItem) {
       saved = await updateTimeSlot(editingItem.id, formData);
     } else {
-      saved = await addTimeSlot(formData);
+      saved = await addTimeSlot({ ...formData, bookingDate: hasDateOverride ? selectedDate : null });
     }
     if (saved) setModalOpen(false);
   };
@@ -96,13 +108,63 @@ export const AdminTimeSlots = () => {
           </p>
         </div>
 
-        <button
-          onClick={handleOpenAdd}
-          className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-mono font-black text-xs tracking-wider uppercase shadow-lime-sm hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
-        >
-          <Plus className="w-4 h-4 stroke-[3]" />
-          <span>ADD TIME SLOT</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex flex-col gap-1 text-[9px] font-bold text-[#9EA79C] uppercase tracking-wider">
+            Schedule date
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(event) => setSelectedDate(event.target.value)}
+              className="rounded-xl border border-white/[0.12] bg-[#111512] px-3 py-2 text-xs text-[#F5F7F2]"
+            />
+          </label>
+          <button
+            onClick={handleOpenAdd}
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-[#C6FF00] hover:bg-[#D4FF33] text-[#080A08] font-mono font-black text-xs tracking-wider uppercase shadow-lime-sm hover:scale-[1.02] active:scale-95 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4 stroke-[3]" />
+            <span>ADD {hasDateOverride ? 'DATE' : 'DEFAULT'} SLOT</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.08] bg-[#111512] px-5 py-4">
+        <div>
+          <div className="text-xs font-black text-[#F5F7F2] uppercase">
+            {hasDateOverride ? `Custom schedule for ${selectedDate}` : `Default schedule applies to ${selectedDate}`}
+          </div>
+          <div className="mt-1 text-[10px] text-[#9EA79C]">
+            {hasDateOverride ? 'Changes affect this date only.' : 'Customize this date to change its slots without affecting other dates.'}
+          </div>
+        </div>
+        {hasDateOverride ? (
+          <button
+            type="button"
+            disabled={scheduleBusy}
+            onClick={async () => {
+              if (!confirm(`Remove the custom schedule for ${selectedDate} and use the default slots again? Existing bookings will remain.`)) return;
+              setScheduleBusy(true);
+              await resetTimeSlotOverride(selectedDate);
+              setScheduleBusy(false);
+            }}
+            className="rounded-full border border-white/[0.12] px-4 py-2 text-[10px] font-black text-[#9EA79C] hover:text-[#F5F7F2] disabled:opacity-50"
+          >
+            {scheduleBusy ? 'PLEASE WAIT…' : 'USE DEFAULT SCHEDULE'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={scheduleBusy}
+            onClick={async () => {
+              setScheduleBusy(true);
+              await createTimeSlotOverride(selectedDate);
+              setScheduleBusy(false);
+            }}
+            className="rounded-full bg-[#C6FF00] px-4 py-2 text-[10px] font-black text-[#080A08] disabled:opacity-50"
+          >
+            {scheduleBusy ? 'PLEASE WAIT…' : 'CUSTOMIZE THIS DATE'}
+          </button>
+        )}
       </div>
 
       {/* Telemetry Stats Bar */}
@@ -156,7 +218,7 @@ export const AdminTimeSlots = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.06]">
-              {timeSlots.map((slot) => {
+            {visibleSlots.map((slot) => {
                 const isActive = slot.isActive !== false;
 
                 return (
@@ -234,10 +296,10 @@ export const AdminTimeSlots = () => {
                 );
               })}
 
-              {timeSlots.length === 0 && (
+              {visibleSlots.length === 0 && (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-[#687366]">
-                    No time slots configured. Click "ADD TIME SLOT" above.
+                    No time slots in this schedule. Click "ADD SLOT" above.
                   </td>
                 </tr>
               )}

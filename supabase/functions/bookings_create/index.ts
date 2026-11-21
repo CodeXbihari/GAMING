@@ -112,20 +112,22 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { data: configuredSlots, error: slotsError } = await admin
-      .from('time_slots')
-      .select('label, start_time, end_time')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true });
-    if (slotsError) {
-      console.error('Could not load configured time slots:', slotsError.code ?? 'unknown');
+    const [{ data: scheduleOverride, error: scheduleError }, { data: configuredSlots, error: slotsError }] = await Promise.all([
+      admin.from('time_slot_schedules').select('booking_date').eq('booking_date', dateISO).maybeSingle(),
+      admin.from('time_slots').select('label, start_time, end_time, booking_date').eq('is_active', true)
+        .or(`booking_date.is.null,booking_date.eq.${dateISO}`).order('sort_order', { ascending: true }),
+    ]);
+    if (scheduleError || slotsError) {
+      console.error('Could not load configured time slots:', scheduleError?.code ?? slotsError?.code ?? 'unknown');
       return jsonResponse({
-        error: schemaError(slotsError)
+        error: schemaError(scheduleError || slotsError)
           ? 'Booking backend is out of date. Apply the Supabase migrations and redeploy the booking function.'
           : 'Could not verify the selected time slot',
       }, 503);
     }
-    const configuredSlot = (configuredSlots ?? []).find((item) => item.label === slot);
+    const configuredSlot = (configuredSlots ?? []).find((item) => (
+      item.label === slot && (scheduleOverride ? item.booking_date === dateISO : item.booking_date === null)
+    ));
     if (!configuredSlot) {
       return jsonResponse({ error: 'This time slot is not available for booking' }, 400);
     }

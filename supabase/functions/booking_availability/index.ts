@@ -65,18 +65,19 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const [{ data: selectedEquipment, error: equipmentError }, { data: slots, error: slotsError }, { data: bookings, error: bookingsError }] = await Promise.all([
+    const [{ data: selectedEquipment, error: equipmentError }, { data: scheduleOverride, error: scheduleError }, { data: configuredSlots, error: slotsError }, { data: bookings, error: bookingsError }] = await Promise.all([
       admin.from('equipment').select('id, category, status, inventory_count').eq('id', equipmentId).maybeSingle(),
+      admin.from('time_slot_schedules').select('booking_date').eq('booking_date', dateISO).maybeSingle(),
       // Include inactive rows so students can see slots paused by an admin.
-      admin.from('time_slots').select('label, start_time, end_time, is_active').order('sort_order'),
+      admin.from('time_slots').select('label, start_time, end_time, is_active, booking_date').or(`booking_date.is.null,booking_date.eq.${dateISO}`).order('sort_order'),
       // Active bookings determine this equipment's capacity and combo conflicts.
       admin.from('bookings').select('equipment_id, slot, start_time, end_time')
         .eq('booking_date', dateISO)
         .in('booking_status', ['Confirmed', 'Pending Verification', 'Pending Payment', 'confirmed', 'pending_verification', 'pending_payment']),
     ]);
 
-    if (equipmentError || slotsError || bookingsError) {
-      console.error('Could not load booking availability:', equipmentError?.code ?? slotsError?.code ?? bookingsError?.code ?? 'unknown');
+    if (equipmentError || scheduleError || slotsError || bookingsError) {
+      console.error('Could not load booking availability:', equipmentError?.code ?? scheduleError?.code ?? slotsError?.code ?? bookingsError?.code ?? 'unknown');
       return respond({ error: 'Could not load booking availability' }, 503);
     }
     if (!selectedEquipment || selectedEquipment.status?.toLowerCase() !== 'available') {
@@ -84,6 +85,9 @@ Deno.serve(async (req) => {
     }
 
     const selectedCategory = String(selectedEquipment.category ?? '').toLowerCase();
+    const slots = (configuredSlots ?? []).filter((item) => (
+      scheduleOverride ? item.booking_date === dateISO : item.booking_date === null
+    ));
     const overlaps = (booking: { slot: string; start_time: string | null; end_time: string | null }, candidate: { label: string; start_time: string; end_time: string }) => (
       booking.slot === candidate.label
       || Boolean(booking.start_time && booking.end_time
@@ -92,21 +96,21 @@ Deno.serve(async (req) => {
     );
     const selectedRigCapacity = Math.max(1, Number(selectedEquipment.inventory_count) || 1);
     const activeBookings = bookings ?? [];
-    const unavailableSlots = (slots ?? []).filter((candidate) => (
+    const unavailableSlots = slots.filter((candidate) => (
       activeBookings.filter((booking) => booking.equipment_id === equipmentId && overlaps(booking, candidate)).length >= selectedRigCapacity
     )).map((slot) => slot.label);
     const comboBlockedSlots = selectedCategory === 'combo'
-      ? (slots ?? []).filter((candidate) => activeBookings.some((booking) => (
+      ? slots.filter((candidate) => activeBookings.some((booking) => (
         booking.equipment_id !== equipmentId
         && overlaps(booking, candidate)
       ))).map((slot) => slot.label)
       : [];
 
     return respond({
-      slots: slots ?? [],
+      slots,
       unavailable_slots: unavailableSlots,
       combo_blocked_slots: comboBlockedSlots,
-      cancelled_slots: (slots ?? []).filter((slot) => !slot.is_active).map((slot) => slot.label),
+      cancelled_slots: slots.filter((slot) => !slot.is_active).map((slot) => slot.label),
     });
   } catch (error) {
     console.error('Availability request failed:', error instanceof Error ? error.name : 'Unknown error');

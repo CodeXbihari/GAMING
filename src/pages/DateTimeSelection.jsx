@@ -15,6 +15,7 @@ export const DateTimeSelection = () => {
     setCurrentPage,
     isSlotBooked,
     timeSlots,
+    timeSlotOverrides,
     addToast
   } = useApp();
 
@@ -166,7 +167,10 @@ export const DateTimeSelection = () => {
   }, [viewYear, viewMonth, todayAtMidnight, maxBookableDate]);
 
   // Slots to display
-  const availableSlots = (serverSlots ?? timeSlots)
+  const localDateSlots = timeSlotOverrides.includes(selectedDateISO)
+    ? timeSlots.filter((slot) => slot.bookingDate === selectedDateISO)
+    : timeSlots.filter((slot) => !slot.bookingDate);
+  const availableSlots = (serverSlots ?? localDateSlots)
     .slice()
     .sort((a, b) => (a.sort_order ?? a.sortOrder ?? 0) - (b.sort_order ?? b.sortOrder ?? 0));
   const selectedSlotConfig = availableSlots.find((slot) => slot.label === selectedSlot);
