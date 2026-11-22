@@ -8,7 +8,7 @@ const INITIAL_EQUIPMENT = [
     id: 'b1111111-1111-1111-1111-111111111111',
     name: 'ASUS TUF Gaming Laptop',
     assetCode: 'LAP-001',
-    price: 65,
+    price: 49,
     unit: 'hour',
     description: 'AMD Ryzen 7 7435HS • NVIDIA RTX 3050 4GB • 16GB RAM • 512GB SSD',
     specs: 'Ryzen 7 7435HS • RTX 3050 4GB • 16GB RAM • 512GB SSD • 144Hz FHD',
@@ -22,7 +22,7 @@ const INITIAL_EQUIPMENT = [
     id: 'b2222222-2222-2222-2222-222222222222',
     name: 'EvoFox Elite Ops Wireless',
     assetCode: 'CON-001',
-    price: 40,
+    price: 29,
     unit: 'hour',
     description: 'EvoFox Hyperconnect 2.4GHz Wireless Gamepad',
     specs: 'Hyperconnect™ 2.4GHz USB • Dual Rumble Motors • Textured Grips',
@@ -36,7 +36,7 @@ const INITIAL_EQUIPMENT = [
     id: 'b3333333-3333-3333-3333-333333333333',
     name: 'Battle Station Combo',
     assetCode: 'CMB-001',
-    price: 110,
+    price: 69,
     unit: 'hour',
     description: 'Complete Dual Setup (ASUS TUF Laptop + 2x EvoFox Gamepads)',
     specs: 'TUF Ryzen 7 7435HS • RTX 3050 4GB + 2x EvoFox Hyperconnect Gamepads',
@@ -346,7 +346,7 @@ export const AppProvider = ({ children }) => {
     const normalizedStatus = normalizeEquipmentStatus(item.status);
     const isLaptop = type === 'laptop';
     const isCombo = type === 'combo';
-    const defaultPrice = isCombo ? 110 : isLaptop ? 65 : 40;
+    const defaultPrice = isCombo ? 69 : isLaptop ? 49 : 29;
 
     const defaultImage = isCombo 
       ? '/images/combo-setup.jpg' 

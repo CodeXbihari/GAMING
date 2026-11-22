@@ -438,7 +438,7 @@ export const DateTimeSelection = () => {
               {selectedEquipment?.name || 'ASUS TUF Gaming Laptop'}
             </div>
             <div className="text-xs font-mono font-bold text-[#C6FF00]">
-              ₹{selectedEquipment?.price || 50} / hour
+              ₹{selectedEquipment?.price || (selectedEquipment?.type === 'combo' ? 69 : selectedEquipment?.type === 'laptop' ? 49 : 29)} / hour
             </div>
           </div>
         </div>

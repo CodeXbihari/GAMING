@@ -25,7 +25,7 @@ export const AdminEquipment = () => {
     name: '',
     assetCode: '',
     type: 'laptop',
-    price: 50,
+    price: 49,
     status: 'Available',
     description: '',
     specs: '',
@@ -47,7 +47,7 @@ export const AdminEquipment = () => {
       name: '',
       assetCode: createAssetCode(equipmentList),
       type: 'laptop',
-      price: 50,
+      price: 49,
       status: 'Available',
       description: 'AMD Ryzen 7 7435HS • NVIDIA RTX 3050 4GB • 16GB RAM • 512GB SSD',
       specs: 'Ryzen 7 7435HS • RTX 3050 4GB • 16GB RAM • 512GB SSD • 144Hz FHD',
@@ -519,7 +519,14 @@ export const AdminEquipment = () => {
                   </label>
                   <select
                     value={formData.type}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    onChange={(e) => {
+                      const type = e.target.value;
+                      setFormData((prev) => ({
+                        ...prev,
+                        type,
+                        ...(!editingItem && { price: type === 'combo' ? 69 : type === 'laptop' ? 49 : 29 })
+                      }));
+                    }}
                     className="w-full bg-[#171D18] border border-white/[0.1] rounded-2xl px-4 py-3 text-[#F5F7F2] focus:outline-none focus:border-[#C6FF00] font-mono text-sm cursor-pointer"
                   >
                     <option value="laptop">Gaming Laptop</option>

@@ -36,7 +36,7 @@ export const Checkout = () => {
   const upiId = import.meta.env.VITE_UPI_ID || '7644940067@ptsbi';
   const qrCodeUrl = import.meta.env.VITE_QR_CODE_URL || '/upi_qr.jpg';
   const endTime = getEndSlotTime(selectedSlot);
-  const totalAmount = selectedEquipment?.price || 50;
+  const totalAmount = selectedEquipment?.price || (selectedEquipment?.type === 'combo' ? 69 : selectedEquipment?.type === 'laptop' ? 49 : 29);
 
   const handleCopyUPI = () => {
     navigator.clipboard?.writeText(upiId);
